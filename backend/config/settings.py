@@ -126,18 +126,19 @@ STATIC_URL = 'static/'
 # CORS / FRONTEND ACCESS (PROD)
 # ==============================
 
-INSTALLED_APPS += [
-    "corsheaders",
-]
-
-MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
-] + MIDDLEWARE
-
-CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOWED_ORIGINS = [
+    "https://hardle-theta.vercel.app",
+]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://*.vercel.app",
     "https://*.railway.app",
+]
+
+CORS_ALLOW_HEADERS = [
+    "authorization",
+    "content-type",
+    "x-csrftoken",
 ]
