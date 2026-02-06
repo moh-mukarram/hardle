@@ -106,6 +106,9 @@
             return;
         }
 
+        // If hidden input is used, let handleInput handle letters to avoid duplicates/Android issues
+        if (e.target === hiddenInput) return;
+
         if (/^[a-zA-Z]$/.test(e.key) && currentGuess.length < 5) {
             currentGuess += e.key.toUpperCase();
         }
@@ -166,20 +169,49 @@
                 return { greenCount, yellowCount };
             });
     }
+
+    function handleInput(
+        e: Event & { currentTarget: EventTarget & HTMLInputElement },
+    ) {
+        if (!session || session.status !== "IN_PROGRESS" || loading) return;
+        const target = e.currentTarget;
+        const val = target.value;
+
+        // Reset input immediately to keep it clean
+        target.value = "";
+
+        if (!val) {
+            // If value is empty, it might be a backspace was pressed while empty?
+            // Input event with inputType 'deleteContentBackward' handles backspace normally.
+            const inputEvent = e as unknown as InputEvent;
+            if (inputEvent.inputType === "deleteContentBackward") {
+                currentGuess = currentGuess.slice(0, -1);
+            }
+            return;
+        }
+
+        // Handle inserted text
+        const char = val.slice(-1).toUpperCase(); // Take last char just in case
+        if (/^[A-Z]$/.test(char) && currentGuess.length < 5) {
+            currentGuess += char;
+        }
+    }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- Mobile Keyboard Trigger (Hidden) -->
+<!-- Mobile Keyboard Trigger (Hidden but effectively visible for Android) -->
+<!-- opacity-1 but tiny: Android ignores opacity-0 inputs -->
 <input
     bind:this={hiddenInput}
     type="text"
     inputmode="text"
-    class="fixed top-0 left-0 opacity-0 pointer-events-none w-px h-px"
+    class="fixed top-0 left-0 w-px h-px opacity-1 pointer-events-auto"
     autocomplete="off"
     autocorrect="off"
     autocapitalize="characters"
     spellcheck="false"
+    oninput={handleInput}
 />
 
 <div
