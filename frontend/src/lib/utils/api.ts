@@ -11,17 +11,17 @@ export interface GuessDetail {
     colors: number[]; // 0=Gray, 1=Yellow, 2=Green
 }
 
-export const API_BASE = '/api';
+export const API_BASE = import.meta.env.VITE_API_URL;
 
 export async function getGameState(sessionId?: string): Promise<GameSession> {
-    const url = sessionId ? `${API_BASE}/game/state?session_id=${sessionId}` : `${API_BASE}/game/state`;
+    const url = sessionId ? `${API_BASE}/api/game/state?session_id=${sessionId}` : `${API_BASE}/api/game/state`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch game state');
     return res.json();
 }
 
 export async function submitGuess(sessionId: string, guess: string): Promise<GameSession> {
-    const res = await fetch(`${API_BASE}/game/guess?session_id=${sessionId}`, {
+    const res = await fetch(`${API_BASE}/api/game/guess?session_id=${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guess })
@@ -35,7 +35,7 @@ export async function submitGuess(sessionId: string, guess: string): Promise<Gam
 }
 
 export async function resetGame(): Promise<GameSession> {
-    const res = await fetch(`${API_BASE}/game/reset`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/api/game/reset`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to reset game');
     return res.json();
 }
@@ -54,7 +54,7 @@ export interface LeaderboardEntry {
 }
 
 export async function signup(username: string, email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${API_BASE}/auth/signup`, {
+    const res = await fetch(`${API_BASE}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password })
@@ -67,7 +67,7 @@ export async function signup(username: string, email: string, password: string):
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${API_BASE}/auth/login`, {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -80,18 +80,18 @@ export async function login(email: string, password: string): Promise<AuthRespon
 }
 
 export async function getMe(): Promise<AuthResponse> {
-    const res = await fetch(`${API_BASE}/auth/me`);
+    const res = await fetch(`${API_BASE}/api/auth/me`);
     if (!res.ok) throw new Error('Not authenticated');
     return res.json();
 }
 
 export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
-    const res = await fetch(`${API_BASE}/auth/leaderboard`);
+    const res = await fetch(`${API_BASE}/api/auth/leaderboard`);
     if (!res.ok) throw new Error('Failed to fetch leaderboard');
     return res.json();
 }
 
 export async function logout(): Promise<void> {
-    const res = await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
     if (!res.ok) throw new Error('Logout failed');
 }
