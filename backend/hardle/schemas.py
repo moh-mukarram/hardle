@@ -1,5 +1,5 @@
 from ninja import Schema
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 class GuessRequest(Schema):
@@ -14,3 +14,22 @@ class GameSessionSchema(Schema):
     status: str
     guesses: List[GuessDetail]
     # target_word is intentionally OMITTED
+
+# Auth Schemas
+class SignupRequest(Schema):
+    username: str
+    email: str
+    password: str
+
+class LoginRequest(Schema):
+    email: str
+    password: str
+
+class UserSchema(Schema):
+    username: str
+    email: str
+    points: int = 0
+
+class LeaderboardEntry(Schema):
+    username: str
+    points: int
