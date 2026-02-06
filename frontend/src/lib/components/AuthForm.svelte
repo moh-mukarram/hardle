@@ -2,12 +2,17 @@
     import { signup, login } from "$lib/utils/api";
     import { getAuthStore } from "$lib/state/auth.svelte";
     import { goto } from "$app/navigation";
+    import { Eye, EyeOff } from "lucide-svelte";
 
     let isLogin = $state(true); // Toggle between Login and Signup
     let username = $state("");
     let email = $state("");
     let password = $state("");
+    let confirmPassword = $state("");
+    let showPassword = $state(false);
+    let showConfirmPassword = $state(false);
     let errorMsg = $state("");
+    let passwordError = $state("");
     let loading = $state(false);
 
     const auth = getAuthStore();
@@ -16,6 +21,13 @@
         e.preventDefault();
         loading = true;
         errorMsg = "";
+        passwordError = "";
+
+        if (!isLogin && password !== confirmPassword) {
+            passwordError = "Passwords do not match";
+            loading = false;
+            return;
+        }
 
         try {
             if (isLogin) {
@@ -25,7 +37,7 @@
                 const user = await signup(username, email, password);
                 auth.setUser(user);
             }
-            goto("/game");
+            goto("/modes");
         } catch (err: any) {
             errorMsg = err.message;
         } finally {
@@ -81,15 +93,69 @@
                 <label for="password" class="block text-sm text-gray-400"
                     >Password</label
                 >
-                <input
-                    id="password"
-                    type="password"
-                    placeholder="Password"
-                    bind:value={password}
-                    required
-                    class="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-800 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent transition-all"
-                />
+                <div class="relative">
+                    <input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Password"
+                        bind:value={password}
+                        required
+                        class="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-800 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent transition-all pr-12"
+                    />
+                    <button
+                        type="button"
+                        onclick={() => (showPassword = !showPassword)}
+                        class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-1"
+                        aria-label={showPassword
+                            ? "Hide password"
+                            : "Show password"}
+                    >
+                        {#if showPassword}
+                            <EyeOff size={20} />
+                        {:else}
+                            <Eye size={20} />
+                        {/if}
+                    </button>
+                </div>
             </div>
+
+            {#if !isLogin}
+                <div class="space-y-2">
+                    <label
+                        for="confirmPassword"
+                        class="block text-sm text-gray-400"
+                        >Confirm Password</label
+                    >
+                    <div class="relative">
+                        <input
+                            id="confirmPassword"
+                            type={showConfirmPassword ? "text" : "password"}
+                            placeholder="Confirm Password"
+                            bind:value={confirmPassword}
+                            required
+                            class="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-800 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent transition-all pr-12"
+                        />
+                        <button
+                            type="button"
+                            onclick={() =>
+                                (showConfirmPassword = !showConfirmPassword)}
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-1"
+                            aria-label={showConfirmPassword
+                                ? "Hide password"
+                                : "Show password"}
+                        >
+                            {#if showConfirmPassword}
+                                <EyeOff size={20} />
+                            {:else}
+                                <Eye size={20} />
+                            {/if}
+                        </button>
+                    </div>
+                    {#if passwordError}
+                        <p class="text-red-500 text-sm mt-1">{passwordError}</p>
+                    {/if}
+                </div>
+            {/if}
 
             {#if errorMsg}
                 <p class="text-red-500 text-sm">{errorMsg}</p>
@@ -97,8 +163,8 @@
 
             <button
                 type="submit"
-                disabled={loading}
-                class="w-full px-6 py-3 bg-[#d4a933] hover:bg-[#e0b840] text-black font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50"
+                disabled={loading || (!isLogin && password !== confirmPassword)}
+                class="w-full px-6 py-3 bg-[#d4a933] hover:bg-[#e0b840] text-black font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {loading ? "Processing..." : isLogin ? "Log In" : "Sign Up"}
             </button>

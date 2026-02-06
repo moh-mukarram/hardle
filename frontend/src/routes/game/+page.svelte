@@ -1,8 +1,9 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { RotateCcw, Info, LogOut, Trophy } from "lucide-svelte";
+    import { RotateCcw, Info, ArrowLeft, Trophy } from "lucide-svelte";
     import DiscordIcon from "$lib/components/icons/DiscordIcon.svelte";
     import { goto } from "$app/navigation";
+    import { page } from "$app/stores";
     import {
         getGameState,
         submitGuess,
@@ -13,6 +14,7 @@
     } from "$lib/utils/api";
 
     import { getAuthStore } from "$lib/state/auth.svelte";
+    import { MODES } from "$lib/config/modes";
     import GameBoard from "$lib/components/GameBoard.svelte";
     import SummaryBox from "$lib/components/SummaryBox.svelte";
     import RoughWorkPanel from "$lib/components/RoughWorkPanel.svelte";
@@ -26,15 +28,90 @@
     let loading = $state(false);
     let errorMsg = $state("");
     let hiddenInput: HTMLInputElement; // Ref for mobile keyboard trigger
+    // Reactive activeMode based on URL
+    let activeMode = $state(MODES.find((m) => m.id === "hard")!);
 
-    // Visual Filters (Experimental Modes) - Hidden in UI but logic kept dormant
-    let disableGreen = $state(true);
-    let disableYellow = $state(true);
+    // Visual Filters (Experimental Modes)
+    // Always enabled by default (false = colors shown). Masking happens in displayGuesses.
+    let disableGreen = $state(false);
+    let disableYellow = $state(false);
 
     // Modal States
     let showInstructions = $state(false);
     let showLeaderboard = $state(false);
     let showEndgameModal = $state(false);
+
+    // Derived State for Board Display
+    // Derived State for Board Display
+    let displayGuesses = $derived.by(() => {
+        if (!session) return [];
+
+        const mode = activeMode.id;
+
+        // EXTREME: Always suppress colors (Mask to 0)
+        if (mode === "extreme") {
+            return session.guesses.map((g) => ({
+                ...g,
+                colors: [0, 0, 0, 0, 0],
+            }));
+        }
+
+        // VERY HARD / DAILY: Guesses 1-3 Normal, Guesses 4+ Mask to 0
+        if (mode === "very_hard" || mode === "daily") {
+            return session.guesses.map((g, i) => {
+                if (i >= 3) {
+                    // Force neutral gray (0)
+                    return { ...g, colors: [0, 0, 0, 0, 0] };
+                }
+                return g;
+            });
+        }
+
+        // HARD: Guesses 1-3 Normal, Guesses 4+ Disable GREEN (2->0), Keep YELLOW
+        if (mode === "hard") {
+            return session.guesses.map((g, i) => {
+                if (i >= 3) {
+                    return {
+                        ...g,
+                        // Map Green(2) -> Gray(0). Keep Yellow(1) and Gray(0).
+                        colors: g.colors.map((c) => (c === 2 ? 0 : c)),
+                    };
+                }
+                return g;
+            });
+        }
+
+        // Default: Show colors as-is
+        return session.guesses;
+    });
+
+    // Scoring Logic (Display Only)
+    // EXTREME=20, VERY_HARD=10, DAILY=10, HARD=5
+    let winPoints = $derived.by(() => {
+        if (!activeMode) return 0;
+        switch (activeMode.id) {
+            case "extreme":
+                return 20;
+            case "very_hard":
+                return 10;
+            case "daily":
+                return 10;
+            case "hard":
+                return 5;
+            default:
+                return 5;
+        }
+    });
+
+    $effect(() => {
+        const modeId = $page.url.searchParams.get("mode");
+        if (modeId) {
+            const found = MODES.find((m) => m.id === modeId);
+            if (found) {
+                activeMode = found;
+            }
+        }
+    });
 
     onMount(async () => {
         // Auth Check
@@ -59,6 +136,8 @@
             loading = false;
         }
     });
+
+    // ... (rest of the file remains, removing handleVirtualKey and Keyboard markup below)
 
     // Reactive check for auth in case of logout
     $effect(() => {
@@ -244,7 +323,7 @@
                     </p>
                     <p class="text-lg text-white">
                         You gained <span class="font-bold"
-                            >{session.status === "WIN" ? "5" : "0"} points</span
+                            >{session.status === "WIN" ? winPoints : "0"} points</span
                         >.
                     </p>
                     <p class="text-sm text-gray-400">
@@ -316,13 +395,28 @@
 
             <!-- Center: Title & User Info Stacked -->
             <div
-                class="w-full lg:w-auto relative lg:absolute lg:inset-0 flex flex-col items-center justify-center order-1 lg:order-none pointer-events-none"
+                class="w-full max-w-md relative flex flex-col items-center justify-center order-1 lg:order-none pointer-events-none"
             >
-                <h1
-                    class="text-3xl sm:text-4xl font-bold tracking-wide pointer-events-auto"
+                <!-- Dynamic Mode Header Container (Display Only) -->
+                <!-- Exact 1:1 match of Modes card styling, with pointer-events disabled for interaction but enabled for layout -->
+                <div
+                    class="w-full max-w-md flex flex-col items-start p-5 rounded-xl border {activeMode.bg} text-left mb-2 shadow-md transition-all pointer-events-auto"
                 >
-                    HARDLE
-                </h1>
+                    <div class="flex items-center justify-between w-full mb-1">
+                        <span
+                            class="px-2 py-0.5 text-[10px] font-bold tracking-wider rounded uppercase {activeMode.tagColor}"
+                        >
+                            {activeMode.tag}
+                        </span>
+                        <span class="text-sm tracking-widest"
+                            >{activeMode.fire}</span
+                        >
+                    </div>
+                    <h1 class="text-2xl font-bold {activeMode.color} mb-1">
+                        {activeMode.title}
+                    </h1>
+                    <p class="text-sm text-gray-400">{activeMode.desc}</p>
+                </div>
                 {#if auth.user}
                     <div
                         class="text-[10px] sm:text-xs text-gray-500 font-mono uppercase tracking-widest mt-1"
@@ -364,11 +458,11 @@
                     <RotateCcw size={24} />
                 </button>
                 <button
-                    onclick={handleLogout}
-                    class="p-2 hover:bg-[#3a3a3c] rounded transition-colors text-red-400"
-                    aria-label="Logout"
+                    onclick={() => goto("/modes")}
+                    class="p-2 hover:bg-[#3a3a3c] rounded transition-colors text-gray-400 hover:text-white"
+                    aria-label="Back to Game Modes"
                 >
-                    <LogOut size={24} />
+                    <ArrowLeft size={24} />
                 </button>
             </div>
         </div>
@@ -386,17 +480,39 @@
             <div
                 class="w-full max-w-2xl bg-[#1e1e1e] border border-[#3a3a3c] rounded-lg p-6 text-sm"
             >
-                <h2 class="text-xl font-bold mb-3">How to Play</h2>
+                <h2 class="text-xl font-bold mb-3">{activeMode.title} Rules</h2>
                 <ul class="space-y-2 text-gray-300">
-                    <li>
-                        • Keyboard Input Only. Type to guess. Enter to submit.
-                    </li>
-                    <li>
-                        • <span class="text-[#6aaa64]">Green</span> = Correct position
-                    </li>
-                    <li>
-                        • <span class="text-[#c9b458]">Yellow</span> = Wrong position
-                    </li>
+                    <li>• Keyboard Input Only. Enter to submit.</li>
+                    {#if activeMode.id === "extreme"}
+                        <li>
+                            • <span class="text-red-500 font-bold"
+                                >NO COLORS EVER.</span
+                            > Pure deduction.
+                        </li>
+                        <li>• Gray tiles only.</li>
+                        <li>• Win = 20 pts.</li>
+                    {:else if activeMode.id === "very_hard" || activeMode.id === "daily"}
+                        <li>
+                            • <span class="text-[#6aaa64]">Green</span> &
+                            <span class="text-[#c9b458]">Yellow</span>
+                            shown for <b>Guesses 1-3</b>.
+                        </li>
+                        <li>• <b>Guesses 4-6</b> are Gray (No Colors).</li>
+                        <li>• Tracker remains active.</li>
+                        <li>• Win = 10 pts.</li>
+                    {:else}
+                        <!-- HARD -->
+                        <li>
+                            • <span class="text-[#6aaa64]">Green</span> &
+                            <span class="text-[#c9b458]">Yellow</span>
+                            shown for <b>Guesses 1-3</b>.
+                        </li>
+                        <li>
+                            • <b>Guesses 4-6</b>: Yellows Only.
+                            <span class="text-red-400">Greens hidden.</span>
+                        </li>
+                        <li>• Win = 5 pts.</li>
+                    {/if}
                 </ul>
             </div>
         {/if}
@@ -423,7 +539,7 @@
                 <div class="flex flex-col items-center gap-3 shrink-0">
                     {#if session}
                         <GameBoard
-                            guesses={session.guesses}
+                            guesses={displayGuesses}
                             {currentGuess}
                             status={session.status}
                             {disableGreen}

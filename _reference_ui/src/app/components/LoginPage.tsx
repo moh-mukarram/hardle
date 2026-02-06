@@ -1,7 +1,13 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState({ email: "", password: "" });
 
   const leaderboardData = [
     { username: "w0rdmaster", points: 1238, rank: 1 },
@@ -16,11 +22,39 @@ export function LoginPage() {
     { username: "anagramadept", points: 850, rank: 10 },
   ];
 
+  const validateForm = () => {
+    const newErrors = { email: "", password: "" };
+    let isValid = true;
+
+    if (!email) {
+      newErrors.email = "Email is required";
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      newErrors.email = "Email is invalid";
+      isValid = false;
+    }
+
+    if (!password) {
+      newErrors.password = "Password is required";
+      isValid = false;
+    } else if (password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Navigate to game page after login
-    navigate("/game");
+    if (validateForm()) {
+      // Navigate to game mode selection after login
+      navigate("/mode-select");
+    }
   };
+
+  const isFormValid = email && password && !errors.email && !errors.password;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-8 py-12 dark">
@@ -59,8 +93,17 @@ export function LoginPage() {
                   id="email"
                   type="email"
                   placeholder="Email"
-                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-800 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent transition-all"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`w-full px-4 py-3 bg-[#1a1a1a] border ${
+                    errors.email ? "border-red-500/50" : "border-gray-800"
+                  } rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 ${
+                    errors.email ? "focus:ring-red-500/50" : "focus:ring-gray-700"
+                  } focus:border-transparent transition-all`}
                 />
+                {errors.email && (
+                  <p className="text-sm text-red-400">{errors.email}</p>
+                )}
               </div>
 
               {/* Password Input */}
@@ -68,18 +111,45 @@ export function LoginPage() {
                 <label htmlFor="password" className="block text-sm text-gray-400">
                   Password
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  placeholder="Password"
-                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-800 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent transition-all"
-                />
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`w-full px-4 py-3 pr-12 bg-[#1a1a1a] border ${
+                      errors.password ? "border-red-500/50" : "border-gray-800"
+                    } rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 ${
+                      errors.password ? "focus:ring-red-500/50" : "focus:ring-gray-700"
+                    } focus:border-transparent transition-all`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-all duration-200"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} className="transition-opacity duration-200" />
+                    ) : (
+                      <Eye size={20} className="transition-opacity duration-200" />
+                    )}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-red-400">{errors.password}</p>
+                )}
               </div>
 
               {/* Log In Button */}
               <button
                 type="submit"
-                className="w-full px-6 py-3 bg-[#d4a933] hover:bg-[#e0b840] text-black font-semibold rounded-lg transition-colors duration-200"
+                disabled={!isFormValid}
+                className={`w-full px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                  isFormValid
+                    ? "bg-[#d4a933] hover:bg-[#e0b840] text-black"
+                    : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                }`}
               >
                 Log In
               </button>

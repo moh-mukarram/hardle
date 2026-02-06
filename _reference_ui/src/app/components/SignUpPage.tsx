@@ -1,6 +1,22 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 export function SignUpPage() {
+  const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errors, setErrors] = useState({
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+
   const leaderboardData = [
     { username: "w0rdmaster", points: 1238, rank: 1 },
     { username: "deducto42", points: 1239, rank: 2 },
@@ -13,6 +29,70 @@ export function SignUpPage() {
     { username: "lexiconking", points: 1850, rank: 9 },
     { username: "anagramadept", points: 850, rank: 10 },
   ];
+
+  const validateForm = () => {
+    const newErrors = {
+      username: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    };
+    let isValid = true;
+
+    if (!username) {
+      newErrors.username = "Username is required";
+      isValid = false;
+    } else if (username.length < 3) {
+      newErrors.username = "Username must be at least 3 characters";
+      isValid = false;
+    }
+
+    if (!email) {
+      newErrors.email = "Email is required";
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      newErrors.email = "Email is invalid";
+      isValid = false;
+    }
+
+    if (!password) {
+      newErrors.password = "Password is required";
+      isValid = false;
+    } else if (password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+      isValid = false;
+    }
+
+    if (!confirmPassword) {
+      newErrors.confirmPassword = "Please confirm your password";
+      isValid = false;
+    } else if (password !== confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (validateForm()) {
+      // Navigate to game mode selection after signup
+      navigate("/mode-select");
+    }
+  };
+
+  const isFormValid =
+    username &&
+    email &&
+    password &&
+    confirmPassword &&
+    password === confirmPassword &&
+    !errors.username &&
+    !errors.email &&
+    !errors.password &&
+    !errors.confirmPassword;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-8 py-12 dark">
@@ -41,7 +121,7 @@ export function SignUpPage() {
             </h2>
 
             {/* Form */}
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={handleSubmit}>
               {/* Username Input */}
               <div className="space-y-2">
                 <label htmlFor="username" className="block text-sm text-gray-400">
@@ -51,8 +131,17 @@ export function SignUpPage() {
                   id="username"
                   type="text"
                   placeholder="Username"
-                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-800 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent transition-all"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className={`w-full px-4 py-3 bg-[#1a1a1a] border ${
+                    errors.username ? "border-red-500/50" : "border-gray-800"
+                  } rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 ${
+                    errors.username ? "focus:ring-red-500/50" : "focus:ring-gray-700"
+                  } focus:border-transparent transition-all`}
                 />
+                {errors.username && (
+                  <p className="text-sm text-red-400">{errors.username}</p>
+                )}
               </div>
 
               {/* Email Input */}
@@ -64,8 +153,17 @@ export function SignUpPage() {
                   id="email"
                   type="email"
                   placeholder="Email"
-                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-800 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent transition-all"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`w-full px-4 py-3 bg-[#1a1a1a] border ${
+                    errors.email ? "border-red-500/50" : "border-gray-800"
+                  } rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 ${
+                    errors.email ? "focus:ring-red-500/50" : "focus:ring-gray-700"
+                  } focus:border-transparent transition-all`}
                 />
+                {errors.email && (
+                  <p className="text-sm text-red-400">{errors.email}</p>
+                )}
               </div>
 
               {/* Password Input */}
@@ -73,18 +171,80 @@ export function SignUpPage() {
                 <label htmlFor="password" className="block text-sm text-gray-400">
                   Password
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  placeholder="Password"
-                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-800 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent transition-all"
-                />
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`w-full px-4 py-3 pr-12 bg-[#1a1a1a] border ${
+                      errors.password ? "border-red-500/50" : "border-gray-800"
+                    } rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 ${
+                      errors.password ? "focus:ring-red-500/50" : "focus:ring-gray-700"
+                    } focus:border-transparent transition-all`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-all duration-200"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} className="transition-opacity duration-200" />
+                    ) : (
+                      <Eye size={20} className="transition-opacity duration-200" />
+                    )}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-red-400">{errors.password}</p>
+                )}
+              </div>
+
+              {/* Confirm Password Input */}
+              <div className="space-y-2">
+                <label htmlFor="confirmPassword" className="block text-sm text-gray-400">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Confirm Password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={`w-full px-4 py-3 pr-12 bg-[#1a1a1a] border ${
+                      errors.confirmPassword ? "border-red-500/50" : "border-gray-800"
+                    } rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 ${
+                      errors.confirmPassword ? "focus:ring-red-500/50" : "focus:ring-gray-700"
+                    } focus:border-transparent transition-all`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-all duration-200"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={20} className="transition-opacity duration-200" />
+                    ) : (
+                      <Eye size={20} className="transition-opacity duration-200" />
+                    )}
+                  </button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-sm text-red-400">{errors.confirmPassword}</p>
+                )}
               </div>
 
               {/* Sign Up Button */}
               <button
                 type="submit"
-                className="w-full px-6 py-3 bg-[#d4a933] hover:bg-[#e0b840] text-black font-semibold rounded-lg transition-colors duration-200"
+                disabled={!isFormValid}
+                className={`w-full px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                  isFormValid
+                    ? "bg-[#d4a933] hover:bg-[#e0b840] text-black"
+                    : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                }`}
               >
                 Sign Up
               </button>

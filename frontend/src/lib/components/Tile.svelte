@@ -22,6 +22,8 @@
                 return "bg-[#c9b458] border-[#c9b458]";
             case 0:
                 return "bg-[#3a3a3c] border-[#3a3a3c]";
+            case 3: // Neutral Static (Very Hard Mode Phase 2)
+                return "bg-[#121213] border-[#3a3a3c]";
             case -1:
             default:
                 return "bg-[#121213] border-[#3a3a3c]";
