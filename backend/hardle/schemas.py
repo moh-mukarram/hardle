@@ -12,6 +12,7 @@ class GuessDetail(Schema):
 class GameSessionSchema(Schema):
     id: UUID
     status: str
+    mode: str = 'hard'
     guesses: List[GuessDetail]
     target_word: Optional[str] = None
     # target_word is intentionally OMITTED by default, populated only on game over

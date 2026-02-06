@@ -8,9 +8,9 @@ COLOR_GREEN = 2
 
 class GameService:
     @staticmethod
-    def create_session() -> GameSession:
+    def create_session(mode: str = 'hard') -> GameSession:
         target = get_random_target()
-        session = GameSession.objects.create(target_word=target)
+        session = GameSession.objects.create(target_word=target, mode=mode)
         return session
 
     @staticmethod

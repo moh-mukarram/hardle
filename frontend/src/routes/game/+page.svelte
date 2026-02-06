@@ -122,7 +122,13 @@
 
         try {
             loading = true;
-            session = await getGameState();
+            const modeParam = $page.url.searchParams.get("mode") || "hard";
+            // Update activeMode immediately for UI consistency
+            const found = MODES.find((m) => m.id === modeParam);
+            if (found) activeMode = found;
+
+            session = await getGameState(undefined, modeParam);
+
             if (
                 session &&
                 (session.status === "WIN" || session.status === "LOSE")

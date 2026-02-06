@@ -38,11 +38,13 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     }
 }
 
-export async function getGameState(sessionId?: string): Promise<GameSession> {
-    const url = sessionId
-        ? `${API_BASE}/api/game/state?session_id=${sessionId}`
-        : `${API_BASE}/api/game/state`;
-    return fetchJson<GameSession>(url);
+export async function getGameState(sessionId?: string, mode: string = 'hard'): Promise<GameSession> {
+    let url = `${API_BASE}/api/game/state`;
+    const params = new URLSearchParams();
+    if (sessionId) params.append("session_id", sessionId);
+    params.append("mode", mode);
+
+    return fetchJson<GameSession>(`${url}?${params.toString()}`);
 }
 
 export async function submitGuess(sessionId: string, guess: string): Promise<GameSession> {

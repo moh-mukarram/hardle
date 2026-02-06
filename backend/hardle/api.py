@@ -15,14 +15,14 @@ api = NinjaAPI(title="Hardle v1.0 API")
 
 # --- Game Router ---
 @api.get("/game/state", response=GameSessionSchema)
-def get_game_state(request, session_id: str = None):
+def get_game_state(request, session_id: str = None, mode: str = 'hard'):
     # Session loading logic similar to previous version
     session = None
     if session_id:
         session = GameService.get_session(session_id)
     
     if not session:
-        session = GameService.create_session()
+        session = GameService.create_session(mode=mode)
         # If user is authenticated, link session
         if request.user.is_authenticated:
             session.user = request.user
@@ -36,6 +36,7 @@ def get_game_state(request, session_id: str = None):
         "id": session.id,
         "status": session.status,
         "guesses": session.guesses,
+        "mode": session.mode if hasattr(session, 'mode') else 'hard',
         "target_word": target_word
     }
             
@@ -51,12 +52,19 @@ def submit_guess(request, payload: GuessRequest, session_id: str):
                  session.user = request.user
                  session.save()
             
-            # SCORING LOGIC: +5 points for WIN
-            # process_guess ensures this only runs once (on transition)
+            # SCORING LOGIC: Points based on mode
             if session.status == 'WIN':
                 profile = getattr(request.user, 'profile', None)
                 if profile:
-                    profile.points += 5
+                    points_map = {
+                        'extreme': 20,
+                        'very_hard': 10,
+                        'daily': 10,
+                        'hard': 5
+                    }
+                    # Default to 5 if mode unknown or 'hard'
+                    points = points_map.get(getattr(session, 'mode', 'hard'), 5)
+                    profile.points += points
                     profile.save()
         
         response_data = {
