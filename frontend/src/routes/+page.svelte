@@ -8,8 +8,8 @@
         type GameSession,
     } from "$lib/utils/api";
     import GameBoard from "$lib/components/GameBoard.svelte";
-    import SummaryBox from "$lib/components/SummaryBox.svelte"; // now consistent
-    import ModeButton from "$lib/components/ModeButton.svelte";
+    import SummaryBox from "$lib/components/SummaryBox.svelte";
+    import RoughWorkPanel from "$lib/components/RoughWorkPanel.svelte";
 
     // State
     let session = $state<GameSession | null>(null);
@@ -17,13 +17,11 @@
     let loading = $state(false);
     let errorMsg = $state("");
 
-    // Visual Filters (Experimental Modes)
+    // Visual Filters (Experimental Modes) - Hidden in UI but logic kept dormant
     let disableGreen = $state(false);
     let disableYellow = $state(false);
 
-    // Summary Box Toggles
-    let showGreenSummary = $state(true);
-    let showYellowSummary = $state(true);
+    // Instructions
     let showInstructions = $state(false);
 
     onMount(async () => {
@@ -41,6 +39,13 @@
     async function handleKeydown(e: KeyboardEvent) {
         if (!session || session.status !== "IN_PROGRESS" || loading) return;
         if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+        // Ignore typing in input fields (RoughWorkPanel)
+        if (
+            e.target instanceof HTMLInputElement ||
+            e.target instanceof HTMLTextAreaElement
+        )
+            return;
 
         if (e.key === "Backspace") {
             currentGuess = currentGuess.slice(0, -1);
@@ -111,7 +116,7 @@
 <div
     class="min-h-screen bg-[#121213] text-white flex items-center justify-center p-4 font-sans"
 >
-    <div class="w-full max-w-6xl flex flex-col items-center gap-8">
+    <div class="w-full max-w-7xl flex flex-col items-center gap-8">
         <!-- Header -->
         <div class="flex items-center justify-between w-full max-w-4xl">
             <button
@@ -155,10 +160,6 @@
                     <li>
                         • <span class="text-[#c9b458]">Yellow</span> = Wrong position
                     </li>
-                    <li>
-                        • Use Mode buttons to suppress colors visually
-                        (Experimental).
-                    </li>
                 </ul>
             </div>
         {/if}
@@ -168,7 +169,7 @@
             class="flex flex-col lg:flex-row items-start justify-center gap-8 w-full"
         >
             <!-- Game Board -->
-            <div class="flex flex-col items-center gap-3">
+            <div class="flex flex-col items-center gap-3 order-1">
                 {#if session}
                     <GameBoard
                         guesses={session.guesses}
@@ -182,31 +183,16 @@
             </div>
 
             <!-- Summary Box (Counts) -->
-            <div class="flex flex-col items-center gap-3">
-                <SummaryBox
-                    rows={getRowCounts()}
-                    showGreen={showGreenSummary}
-                    showYellow={showYellowSummary}
-                    onToggleGreen={() => (showGreenSummary = !showGreenSummary)}
-                    onToggleYellow={() =>
-                        (showYellowSummary = !showYellowSummary)}
-                />
+            <div class="flex flex-col items-center gap-3 order-2">
+                <SummaryBox rows={getRowCounts()} />
                 <p class="text-xs text-gray-500">Live count tracker</p>
             </div>
-        </div>
 
-        <!-- Control Buttons (Mode) -->
-        <div class="flex flex-col sm:flex-row gap-4 w-full max-w-2xl mt-4">
-            <ModeButton
-                mode="green"
-                disabled={disableGreen}
-                onclick={() => (disableGreen = !disableGreen)}
-            />
-            <ModeButton
-                mode="yellow"
-                disabled={disableYellow}
-                onclick={() => (disableYellow = !disableYellow)}
-            />
+            <!-- Rough Work Panel -->
+            <div class="flex flex-col items-center gap-3 order-3">
+                <RoughWorkPanel />
+                <p class="text-xs text-gray-500">Scratch pad for notes</p>
+            </div>
         </div>
     </div>
 </div>
