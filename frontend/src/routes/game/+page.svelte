@@ -25,6 +25,7 @@
     let currentGuess = $state("");
     let loading = $state(false);
     let errorMsg = $state("");
+    let hiddenInput: HTMLInputElement; // Ref for mobile keyboard trigger
 
     // Visual Filters (Experimental Modes) - Hidden in UI but logic kept dormant
     let disableGreen = $state(true);
@@ -84,7 +85,8 @@
 
         // Ignore typing in input fields (RoughWorkPanel)
         if (
-            e.target instanceof HTMLInputElement ||
+            (e.target instanceof HTMLInputElement &&
+                e.target !== hiddenInput) ||
             e.target instanceof HTMLTextAreaElement
         )
             return;
@@ -168,8 +170,20 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
+<!-- Mobile Keyboard Trigger (Hidden) -->
+<input
+    bind:this={hiddenInput}
+    type="text"
+    inputmode="text"
+    class="fixed top-0 left-0 opacity-0 pointer-events-none w-px h-px"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="characters"
+    spellcheck="false"
+/>
+
 <div
-    class="min-h-screen bg-[#121213] text-white flex items-center justify-center p-4 font-sans"
+    class="min-h-screen bg-[#121213] text-white flex items-center justify-center p-4 font-sans overflow-x-hidden"
 >
     <!-- Modal Overlay (Endgame) -->
     {#if showEndgameModal && session}
@@ -255,10 +269,10 @@
     <div class="w-full max-w-7xl flex flex-col items-center gap-8">
         <!-- Header -->
         <div
-            class="flex items-center justify-between w-full max-w-4xl relative min-h-[64px]"
+            class="flex flex-wrap lg:flex-nowrap items-center justify-center lg:justify-between w-full max-w-4xl relative gap-2 lg:gap-0 pt-4 pb-2 lg:py-0"
         >
             <!-- Left: Instructions -->
-            <div class="flex items-center">
+            <div class="flex items-center order-2 lg:order-none">
                 <button
                     onclick={() => (showInstructions = !showInstructions)}
                     class="p-2 hover:bg-[#3a3a3c] rounded transition-colors text-white"
@@ -270,7 +284,7 @@
 
             <!-- Center: Title & User Info Stacked -->
             <div
-                class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
+                class="w-full lg:w-auto relative lg:absolute lg:inset-0 flex flex-col items-center justify-center order-1 lg:order-none pointer-events-none"
             >
                 <h1
                     class="text-3xl sm:text-4xl font-bold tracking-wide pointer-events-auto"
@@ -287,7 +301,7 @@
             </div>
 
             <!-- Right: Controls -->
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 order-3 lg:order-none">
                 <!-- Trophy (Leaderboard) -->
                 <button
                     onclick={() => (showLeaderboard = true)}
@@ -359,29 +373,51 @@
         <div
             class="flex flex-col lg:flex-row items-start justify-center gap-8 w-full"
         >
-            <!-- Game Board -->
-            <div class="flex flex-col items-center gap-3 order-1">
-                {#if session}
-                    <GameBoard
-                        guesses={session.guesses}
-                        {currentGuess}
-                        status={session.status}
-                        {disableGreen}
-                        {disableYellow}
-                    />
-                {/if}
-                <p class="text-xs text-gray-500">Keyboard input only</p>
-            </div>
+            <!-- 
+                Mobile: Wrapper acts as a flex container to keep Board and Summary side-by-side, scaled down.
+                Desktop: Wrapper uses `contents` to vanish, letting children participate directly in the parent flex layout.
+            -->
+            <div
+                class="flex flex-row items-start justify-center gap-2 w-full origin-top scale-[0.60] sm:scale-75 md:scale-90 lg:scale-100 lg:contents order-1 cursor-pointer lg:cursor-default"
+                onclick={() => hiddenInput?.focus()}
+                role="button"
+                tabindex="0"
+                onkeydown={(e) => {
+                    if (e.key === "Enter" || e.key === " ")
+                        hiddenInput?.focus();
+                }}
+            >
+                <!-- Game Board -->
+                <div class="flex flex-col items-center gap-3 shrink-0">
+                    {#if session}
+                        <GameBoard
+                            guesses={session.guesses}
+                            {currentGuess}
+                            status={session.status}
+                            {disableGreen}
+                            {disableYellow}
+                        />
+                    {/if}
+                    <p class="text-xs text-gray-500 whitespace-nowrap">
+                        Keyboard input only
+                    </p>
+                </div>
 
-            <!-- Summary Box (Counts) -->
-            <div class="flex flex-col items-center gap-3 order-2">
-                <SummaryBox rows={getRowCounts()} />
-                <p class="text-xs text-gray-500">Live count tracker</p>
+                <!-- Summary Box (Counts) -->
+                <div class="flex flex-col items-center gap-3 shrink-0">
+                    <SummaryBox rows={getRowCounts()} />
+                    <p class="text-xs text-gray-500 whitespace-nowrap">
+                        Live count tracker
+                    </p>
+                </div>
             </div>
 
             <!-- Rough Work Panel -->
-            <div class="flex flex-col items-center gap-3 order-3">
+            <div
+                class="flex flex-col items-center gap-3 order-2 w-full lg:w-auto mt-[-100px] sm:mt-[-50px] lg:mt-0"
+            >
                 <RoughWorkPanel />
+                <!-- Helper text hidden on mobile to save space if needed, or kept -->
                 <p class="text-xs text-gray-500">Scratch pad for notes</p>
             </div>
         </div>

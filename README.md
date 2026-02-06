@@ -16,3 +16,28 @@ Hardle v1 is a **server-authoritative Wordle-style game** built as a
 
 ## Status
 Foundation implementation in progress.
+
+---
+
+### Configuration
+
+**Local Development**
+No configuration required. The app defaults to:
+- Frontend: `http://localhost:5173`
+- Backend: `http://127.0.0.1:8000`
+
+**Production (Vercel/Railway)**
+Set the following environment variables:
+
+**Frontend (Vercel)**
+```
+VITE_API_URL=https://your-backend-url.railway.app
+```
+
+**Backend (Railway)**
+```
+DJANGO_DEBUG=False
+DATABASE_URL=postgres://...
+ALLOWED_HOSTS=*
+SECRET_KEY=...
+```

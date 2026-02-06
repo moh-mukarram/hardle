@@ -1,3 +1,4 @@
+
 export interface GameSession {
     id: string;
     status: 'IN_PROGRESS' | 'WIN' | 'LOSE';
@@ -11,33 +12,49 @@ export interface GuessDetail {
     colors: number[]; // 0=Gray, 1=Yellow, 2=Green
 }
 
-export const API_BASE = import.meta.env.VITE_API_URL;
+// Fallback to localhost if VITE_API_URL is missing
+export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+
+// Internal helper for safe JSON fetching
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get("content-type");
+
+    if (contentType && contentType.includes("application/json")) {
+        // If response claims to be JSON, try to parse it
+        const data = await res.json();
+        if (!res.ok) {
+            // Backend returned JSON error object
+            throw new Error(data.message || `Request failed: ${res.status}`);
+        }
+        return data as T;
+    } else {
+        // Not JSON (e.g., 500 HTML error, 404 text)
+        if (!res.ok) {
+            throw new Error(`Request failed: ${res.status} ${res.statusText}`);
+        }
+        // Success but not JSON? This shouldn't happen for our API.
+        throw new Error("Invalid response: Expected JSON, got " + (contentType || "unknown"));
+    }
+}
 
 export async function getGameState(sessionId?: string): Promise<GameSession> {
-    const url = sessionId ? `${API_BASE}/api/game/state?session_id=${sessionId}` : `${API_BASE}/api/game/state`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to fetch game state');
-    return res.json();
+    const url = sessionId
+        ? `${API_BASE}/api/game/state?session_id=${sessionId}`
+        : `${API_BASE}/api/game/state`;
+    return fetchJson<GameSession>(url);
 }
 
 export async function submitGuess(sessionId: string, guess: string): Promise<GameSession> {
-    const res = await fetch(`${API_BASE}/api/game/guess?session_id=${sessionId}`, {
+    return fetchJson<GameSession>(`${API_BASE}/api/game/guess?session_id=${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guess })
     });
-
-    if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Failed to submit guess');
-    }
-    return res.json();
 }
 
 export async function resetGame(): Promise<GameSession> {
-    const res = await fetch(`${API_BASE}/api/game/reset`, { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to reset game');
-    return res.json();
+    return fetchJson<GameSession>(`${API_BASE}/api/game/reset`, { method: 'POST' });
 }
 
 // --- Auth API ---
@@ -54,44 +71,31 @@ export interface LeaderboardEntry {
 }
 
 export async function signup(username: string, email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${API_BASE}/api/auth/signup`, {
+    return fetchJson<AuthResponse>(`${API_BASE}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password })
     });
-    if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Signup failed');
-    }
-    return res.json();
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    return fetchJson<AuthResponse>(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
     });
-    if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Login failed');
-    }
-    return res.json();
 }
 
 export async function getMe(): Promise<AuthResponse> {
-    const res = await fetch(`${API_BASE}/api/auth/me`);
-    if (!res.ok) throw new Error('Not authenticated');
-    return res.json();
+    return fetchJson<AuthResponse>(`${API_BASE}/api/auth/me`);
 }
 
 export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
-    const res = await fetch(`${API_BASE}/api/auth/leaderboard`);
-    if (!res.ok) throw new Error('Failed to fetch leaderboard');
-    return res.json();
+    return fetchJson<LeaderboardEntry[]>(`${API_BASE}/api/auth/leaderboard`);
 }
 
 export async function logout(): Promise<void> {
+    // Logout might not return JSON, just 200 OK.
     const res = await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
     if (!res.ok) throw new Error('Logout failed');
 }
