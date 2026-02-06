@@ -13,7 +13,8 @@ class GameSessionSchema(Schema):
     id: UUID
     status: str
     guesses: List[GuessDetail]
-    # target_word is intentionally OMITTED
+    target_word: Optional[str] = None
+    # target_word is intentionally OMITTED by default, populated only on game over
 
 # Auth Schemas
 class SignupRequest(Schema):

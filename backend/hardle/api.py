@@ -28,17 +28,44 @@ def get_game_state(request, session_id: str = None):
             session.user = request.user
             session.save()
             
-    return session
+    # Expose target_word only if game is over
+    target_word = session.target_word if session.status in ['WIN', 'LOSE'] else None
+
+    # explicit construction for safety
+    response_data = {
+        "id": session.id,
+        "status": session.status,
+        "guesses": session.guesses,
+        "target_word": target_word
+    }
+            
+    return response_data
 
 @api.post("/game/guess", response={200: GameSessionSchema, 400: dict})
 def submit_guess(request, payload: GuessRequest, session_id: str):
     try:
         session = GameService.process_guess(session_id, payload.guess)
-        if request.user.is_authenticated and session.user != request.user:
-            # Re-link just in case
-             session.user = request.user
-             session.save()
-        return session
+        if request.user.is_authenticated:
+            # Ensure session is linked
+            if session.user != request.user:
+                 session.user = request.user
+                 session.save()
+            
+            # SCORING LOGIC: +5 points for WIN
+            # process_guess ensures this only runs once (on transition)
+            if session.status == 'WIN':
+                profile = getattr(request.user, 'profile', None)
+                if profile:
+                    profile.points += 5
+                    profile.save()
+        
+        response_data = {
+            "id": session.id,
+            "status": session.status,
+            "guesses": session.guesses,
+            "target_word": session.target_word if session.status in ['WIN', 'LOSE'] else None
+        }
+        return response_data
     except ValueError as e:
         return 400, {"message": str(e)}
 

@@ -3,6 +3,7 @@ export interface GameSession {
     status: 'IN_PROGRESS' | 'WIN' | 'LOSE';
     guesses: GuessDetail[];
     remaining_attempts?: number; // Optional helper
+    target_word?: string; // Populated only on WIN/LOSE
 }
 
 export interface GuessDetail {

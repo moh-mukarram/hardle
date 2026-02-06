@@ -1,6 +1,8 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export function LoginPage() {
+  const navigate = useNavigate();
+
   const leaderboardData = [
     { username: "w0rdmaster", points: 1238, rank: 1 },
     { username: "deducto42", points: 1239, rank: 2 },
@@ -13,6 +15,12 @@ export function LoginPage() {
     { username: "lexiconking", points: 1850, rank: 9 },
     { username: "anagramadept", points: 850, rank: 10 },
   ];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Navigate to game page after login
+    navigate("/game");
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-8 py-12 dark">
@@ -41,7 +49,7 @@ export function LoginPage() {
             </h2>
 
             {/* Form */}
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={handleSubmit}>
               {/* Email Input */}
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-sm text-gray-400">

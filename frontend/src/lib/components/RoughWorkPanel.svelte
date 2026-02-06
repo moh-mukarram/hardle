@@ -52,24 +52,13 @@
             </div>
         </div>
 
-        <!-- Ruled lines area - Starting clearly below the inputs -->
-        <div class="relative border-t border-white/5 pt-2">
-            <!-- Background lines -->
-            <div class="absolute inset-0 pointer-events-none select-none">
-                {#each Array(10) as _, i}
-                    <div
-                        class="border-b border-white/10"
-                        style="height: 32px;"
-                    ></div>
-                {/each}
-            </div>
-
-            <!-- Textarea -->
+        <!-- Free-form writing area -->
+        <div class="mt-4">
             <textarea
                 bind:value={notes}
                 placeholder="Type your deductions here..."
-                class="w-full h-[320px] bg-transparent text-[#d4d4d4] font-mono text-sm resize-none outline-none relative z-10 leading-[32px]"
-                style="caret-color: #6aaa64; line-height: 32px;"
+                class="w-full h-[320px] bg-transparent text-[#d4d4d4] font-mono text-sm resize-none outline-none placeholder:text-gray-600"
+                style="caret-color: #6aaa64;"
             ></textarea>
         </div>
     </div>
