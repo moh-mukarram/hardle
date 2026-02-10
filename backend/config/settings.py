@@ -137,12 +137,25 @@ CORS_ALLOWED_ORIGINS = [
     "https://hardle-theta.vercel.app",
 ]
 
+CORS_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://*.vercel.app",
+    "https://*.railway.app",
+]
+
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:5174",
     "https://*.vercel.app",
     "https://*.railway.app",
 ]
+
+# Allow Cross-Origin Cookies for Vercel -> Railway
+SESSION_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SECURE = True
 
 
 CORS_ALLOW_HEADERS = [

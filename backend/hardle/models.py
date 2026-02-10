@@ -32,3 +32,33 @@ class GameSession(models.Model):
 
     def __str__(self):
         return f"{self.id} - {self.status}"
+
+
+class UserPoints(models.Model):
+    """Per-user, per-month points aggregate. One row per user per month."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_points')
+    total_points = models.IntegerField(default=0)
+    month = models.CharField(max_length=7, db_index=True)  # "YYYY-MM"
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'month')
+
+    def __str__(self):
+        return f"{self.user.username} — {self.month}: {self.total_points}pts"
+
+
+class PointsEvent(models.Model):
+    """Append-only audit log. Every point change is recorded here."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='points_events')
+    source = models.CharField(max_length=50)  # "hardle_daily", "future_game", etc.
+    points = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} +{self.points} ({self.source})"

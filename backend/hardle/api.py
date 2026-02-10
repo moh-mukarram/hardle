@@ -1,4 +1,4 @@
-from ninja import NinjaAPI, Router
+from ninja import NinjaAPI, Router, Query
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
@@ -9,7 +9,9 @@ from .schemas import (
     SignupRequest, LoginRequest, UserSchema, LeaderboardEntry
 )
 from .services import GameService
-from typing import List
+from .points_service import PointsService
+from .ranks import get_rank
+from typing import List, Optional
 
 api = NinjaAPI(title="Hardle v1.0 API")
 
@@ -52,20 +54,18 @@ def submit_guess(request, payload: GuessRequest, session_id: str):
                  session.user = request.user
                  session.save()
             
-            # SCORING LOGIC: Points based on mode
+            # SCORING: Award points via PointsService (single authority)
             if session.status == 'WIN':
-                profile = getattr(request.user, 'profile', None)
-                if profile:
-                    points_map = {
-                        'extreme': 20,
-                        'very_hard': 10,
-                        'daily': 10,
-                        'hard': 5
-                    }
-                    # Default to 5 if mode unknown or 'hard'
-                    points = points_map.get(getattr(session, 'mode', 'hard'), 5)
-                    profile.points += points
-                    profile.save()
+                points_map = {
+                    'extreme': 20,
+                    'very_hard': 10,
+                    'daily': 10,
+                    'hard': 5,
+                }
+                points = points_map.get(getattr(session, 'mode', 'hard'), 5)
+                # source = "hardle_{mode}" for extensibility
+                source = f"hardle_{getattr(session, 'mode', 'hard')}"
+                PointsService.award_points(request.user, source, points)
         
         response_data = {
             "id": session.id,
@@ -78,8 +78,8 @@ def submit_guess(request, payload: GuessRequest, session_id: str):
         return 400, {"message": str(e)}
 
 @api.post("/game/reset", response=GameSessionSchema)
-def reset_game(request):
-    session = GameService.create_session()
+def reset_game(request, mode: str = 'hard'):
+    session = GameService.create_session(mode=mode)
     if request.user.is_authenticated:
         session.user = request.user
         session.save()
@@ -102,23 +102,25 @@ def signup(request, payload: SignupRequest):
         )
         UserProfile.objects.create(user=user)
         login(request, user)  # Auto-login after signup
-        return {"username": user.username, "email": user.email, "points": 0}
+        return {"username": user.username, "email": user.email, "points": 0, "rank": "Bronze"}
     except Exception as e:
         return 400, {"message": str(e)}
 
 @api.post("/auth/login", response={200: UserSchema, 400: dict})
 def login_user(request, payload: LoginRequest):
-    # Authenticate by email (requires finding user first or custom backend, 
-    # but for simplicity we'll try to find user by email first)
+    # Authenticate by email (find user first, then authenticate)
     try:
         user_obj = User.objects.get(email=payload.email)
         user = authenticate(username=user_obj.username, password=payload.password)
         if user:
             login(request, user)
-            points = 0
-            if hasattr(user, 'profile'):
-                points = user.profile.points
-            return {"username": user.username, "email": user.email, "points": points}
+            points = PointsService.get_user_points(user)
+            return {
+                "username": user.username,
+                "email": user.email,
+                "points": points,
+                "rank": get_rank(points),
+            }
         else:
             return 400, {"message": "Invalid credentials"}
     except User.DoesNotExist:
@@ -129,28 +131,34 @@ def get_me(request):
     if not request.user.is_authenticated:
         return 401, {"message": "Not authenticated"}
     
-    points = 0
-    if hasattr(request.user, 'profile'):
-        points = request.user.profile.points
+    points = PointsService.get_user_points(request.user)
         
     return {
         "username": request.user.username,
         "email": request.user.email,
-        "points": points
+        "points": points,
+        "rank": get_rank(points),
     }
 
+# --- Leaderboard ---
+
+@api.get("/leaderboard", response=List[LeaderboardEntry])
+def get_leaderboard(request, month: str = None, limit: int = 100):
+    """
+    Global leaderboard. Read-only aggregation.
+    GET /api/leaderboard?month=2026-02&limit=50
+    Defaults to current month if month is omitted.
+    """
+    return PointsService.get_leaderboard(month=month, limit=limit)
+
+# Keep old endpoint for backward compat with existing frontend
 @api.get("/auth/leaderboard", response=List[LeaderboardEntry])
-def get_leaderboard(request):
-    # Return top 10 sorted by points desc
-    profiles = UserProfile.objects.select_related('user').order_by('-points')[:10]
-    return [
-        {"username": p.user.username, "points": p.points}
-        for p in profiles
-    ]
+def get_leaderboard_legacy(request):
+    """Legacy endpoint — redirects to new PointsService leaderboard."""
+    return PointsService.get_leaderboard(limit=10)
 
 @api.post("/auth/logout", response={200: dict})
 def logout_user(request):
     from django.contrib.auth import logout
     logout(request)
     return {"message": "Logged out successfully"}
-

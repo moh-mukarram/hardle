@@ -17,7 +17,13 @@ export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
 // Internal helper for safe JSON fetching
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(url, options);
+    const defaultOptions: RequestInit = {
+        credentials: 'include', // Ensure cookies are sent
+    };
+
+    const finalOptions = { ...defaultOptions, ...options };
+
+    const res = await fetch(url, finalOptions);
     const contentType = res.headers.get("content-type");
 
     if (contentType && contentType.includes("application/json")) {
@@ -55,8 +61,8 @@ export async function submitGuess(sessionId: string, guess: string): Promise<Gam
     });
 }
 
-export async function resetGame(): Promise<GameSession> {
-    return fetchJson<GameSession>(`${API_BASE}/api/game/reset`, { method: 'POST' });
+export async function resetGame(mode: string = 'hard'): Promise<GameSession> {
+    return fetchJson<GameSession>(`${API_BASE}/api/game/reset?mode=${mode}`, { method: 'POST' });
 }
 
 // --- Auth API ---
@@ -98,6 +104,9 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
 
 export async function logout(): Promise<void> {
     // Logout might not return JSON, just 200 OK.
-    const res = await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include' // CRITICAL: Send session cookie to backend
+    });
     if (!res.ok) throw new Error('Logout failed');
 }

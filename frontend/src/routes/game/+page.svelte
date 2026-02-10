@@ -230,7 +230,7 @@
         if (!skipConfirm && !confirm("Start a new game?")) return;
         try {
             loading = true;
-            session = await resetGame();
+            session = await resetGame(activeMode.id);
             currentGuess = "";
             errorMsg = "";
             showEndgameModal = false;

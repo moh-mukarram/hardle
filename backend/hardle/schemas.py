@@ -31,7 +31,9 @@ class UserSchema(Schema):
     username: str
     email: str
     points: int = 0
+    rank: str = "Bronze"
 
 class LeaderboardEntry(Schema):
     username: str
     points: int
+    rank: str = "Bronze"

@@ -25,3 +25,8 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local Verification Scripts
+verify_production_readiness.py
+test_logic.py
+test_points.py
