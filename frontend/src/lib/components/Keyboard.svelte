@@ -7,7 +7,7 @@
         onKey: (key: string) => void;
     }
 
-    let { guesses, onKey } = $props<Props>();
+    let { guesses, onKey }: Props = $props();
 
     const ROWS = [
         ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
@@ -44,17 +44,21 @@
 
     const getKeyClass = (key: string, color: number) => {
         const base =
-            "flex items-center justify-center rounded font-bold transition-colors select-none cursor-pointer";
+            "px-2 py-3 md:px-4 md:py-4 rounded border-2 font-bold text-xs md:text-sm transition-all duration-200 active:scale-95 flex items-center justify-center select-none cursor-pointer";
         const size =
-            key.length > 1
-                ? "px-3 py-4 text-xs sm:text-sm"
-                : "w-8 h-12 sm:w-10 sm:h-14 text-sm sm:text-lg";
+            key.length > 1 ? "min-w-[60px]" : "min-w-[32px] md:min-w-[40px]";
 
-        let bg = "bg-[#818384] text-white hover:bg-[#9d9ea0]"; // Default/Neutral
+        let bg =
+            "bg-slate-900/40 border-cyan-900/60 text-cyan-300 hover:bg-slate-800/60 hover:border-cyan-700"; // Default
 
-        if (color === 2) bg = "bg-[#6aaa64] text-white";
-        else if (color === 1) bg = "bg-[#c9b458] text-white";
-        else if (color === 0) bg = "bg-[#3a3a3c] text-white"; // Gray (Absent)
+        if (color === 2)
+            bg =
+                "bg-green-900/60 border-green-600 text-green-100 shadow-[var(--glow-key-green)]";
+        else if (color === 1)
+            bg =
+                "bg-amber-900/60 border-amber-600 text-amber-100 shadow-[var(--glow-key-amber)]";
+        else if (color === 0)
+            bg = "bg-slate-800/40 border-slate-700 text-slate-500"; // Absent
 
         return `${base} ${size} ${bg}`;
     };

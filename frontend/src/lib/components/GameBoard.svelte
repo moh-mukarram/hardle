@@ -10,8 +10,8 @@
         disableYellow: boolean;
     }
 
-    let { guesses, currentGuess, status, disableGreen, disableYellow } =
-        $props<Props>();
+    let { guesses, currentGuess, status, disableGreen, disableYellow }: Props =
+        $props();
 
     const TOTAL_ROWS = 6;
     const WORD_LENGTH = 5;

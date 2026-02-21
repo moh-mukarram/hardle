@@ -25,7 +25,11 @@
     }
 
     function selectMode(modeId: string) {
-        goto(`/game?mode=${modeId}`);
+        if (modeId === "daily") {
+            goto("/daily");
+        } else {
+            goto(`/game?mode=${modeId}`);
+        }
     }
 </script>
 

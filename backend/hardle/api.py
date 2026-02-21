@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
 from django.db import IntegrityError
+from django.utils import timezone
 from .models import GameSession, UserProfile
 from .schemas import (
     GameSessionSchema, GuessRequest, 
@@ -12,6 +13,45 @@ from .services import GameService
 from .points_service import PointsService
 from .ranks import get_rank
 from typing import List, Optional
+
+def _get_daily_results(request, session, guess_used=None):
+    """Helper to construct the results object for Daily Mode game end."""
+    if str(session.status) not in ['WIN', 'LOSE'] or getattr(session, 'mode', 'hard') != 'daily':
+        return None
+        
+    points = GameService.calculate_daily_score(session)
+    source = f"hardle_daily"
+    
+    # Ranks and Points (for authenticated users)
+    rank_after = "N/A"
+    points_delta = 0
+    
+    if request.user.is_authenticated:
+        # Don't award points here (get_game_state is read-only), 
+        # just fetch current stats. award_points is in submit_guess.
+        current_points = PointsService.get_user_points(request.user)
+        rank_after = get_rank(current_points)
+        points_delta = getattr(session, '_awarded_points', points)
+    
+    # Count colors for summary
+    total_green = 0
+    total_yellow = 0
+    for g in session.guesses:
+        cols = g.get("colors", [])
+        total_green += cols.count(2)  # COLOR_GREEN
+        total_yellow += cols.count(1) # COLOR_YELLOW
+
+    outcome = "SESSION_EXPIRED" if guess_used == "__TIMEOUT__" else str(session.status)
+    
+    return {
+        "outcome": outcome,
+        "solution": session.target_word,
+        "greens_count": total_green,
+        "yellows_count": total_yellow,
+        "points_delta": points_delta,
+        "rank_current": rank_after, 
+        "rank_after": rank_after
+    }
 
 api = NinjaAPI(title="Hardle v1.0 API")
 
@@ -24,11 +64,24 @@ def get_game_state(request, session_id: str = None, mode: str = 'hard'):
         session = GameService.get_session(session_id)
     
     if not session:
-        session = GameService.create_session(mode=mode)
-        # If user is authenticated, link session
-        if request.user.is_authenticated:
-            session.user = request.user
-            session.save()
+        # IDEMPOTENCY CHECK FOR DAILY MODE
+        if mode == 'daily' and request.user.is_authenticated:
+            today = timezone.now().date()
+            existing_daily = GameSession.objects.filter(
+                user=request.user,
+                mode='daily',
+                created_at__date=today
+            ).first()
+            if existing_daily:
+                session = existing_daily
+        
+        # Create new if still no session
+        if not session:
+            session = GameService.create_session(mode=mode)
+            # If user is authenticated, link session
+            if request.user.is_authenticated:
+                session.user = request.user
+                session.save()
             
     # Expose target_word only if game is over
     target_word = session.target_word if session.status in ['WIN', 'LOSE'] else None
@@ -39,7 +92,8 @@ def get_game_state(request, session_id: str = None, mode: str = 'hard'):
         "status": session.status,
         "guesses": session.guesses,
         "mode": session.mode if hasattr(session, 'mode') else 'hard',
-        "target_word": target_word
+        "target_word": target_word,
+        "results": _get_daily_results(request, session)
     }
             
     return response_data
@@ -48,6 +102,7 @@ def get_game_state(request, session_id: str = None, mode: str = 'hard'):
 def submit_guess(request, payload: GuessRequest, session_id: str):
     try:
         session = GameService.process_guess(session_id, payload.guess)
+        results = None
         if request.user.is_authenticated:
             # Ensure session is linked
             if session.user != request.user:
@@ -55,23 +110,27 @@ def submit_guess(request, payload: GuessRequest, session_id: str):
                  session.save()
             
             # SCORING: Award points via PointsService (single authority)
-            if session.status == 'WIN':
-                points_map = {
-                    'extreme': 20,
-                    'very_hard': 10,
-                    'daily': 10,
-                    'hard': 5,
-                }
-                points = points_map.get(getattr(session, 'mode', 'hard'), 5)
-                # source = "hardle_{mode}" for extensibility
-                source = f"hardle_{getattr(session, 'mode', 'hard')}"
-                PointsService.award_points(request.user, source, points)
+            if str(session.status) in ['WIN', 'LOSE'] and getattr(session, 'mode', 'hard') == 'daily':
+                points = GameService.calculate_daily_score(session)
+                awarded = PointsService.award_points(request.user, f"hardle_daily:{session.id}", points)
+                session._awarded_points = awarded
+                
+            elif str(session.status) == 'WIN':
+                # Legacy modes
+                mode = getattr(session, 'mode', 'hard')
+                points_map = {'extreme': 20, 'very_hard': 10, 'hard': 5}
+                points = points_map.get(mode, 5)
+                PointsService.award_points(request.user, f"hardle_{mode}", points)
+
+        # Build end-state results (auth or anon)
+        results = _get_daily_results(request, session, guess_used=payload.guess)
         
         response_data = {
             "id": session.id,
             "status": session.status,
             "guesses": session.guesses,
-            "target_word": session.target_word if session.status in ['WIN', 'LOSE'] else None
+            "target_word": session.target_word if str(session.status) in ['WIN', 'LOSE'] else None,
+            "results": results
         }
         return response_data
     except ValueError as e:

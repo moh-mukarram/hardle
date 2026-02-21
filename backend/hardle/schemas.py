@@ -15,7 +15,7 @@ class GameSessionSchema(Schema):
     mode: str = 'hard'
     guesses: List[GuessDetail]
     target_word: Optional[str] = None
-    # target_word is intentionally OMITTED by default, populated only on game over
+    results: Optional[dict] = None  # outcome, points_delta, ranks, etc.
 
 # Auth Schemas
 class SignupRequest(Schema):

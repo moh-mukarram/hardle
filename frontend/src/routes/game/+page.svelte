@@ -56,8 +56,8 @@
             }));
         }
 
-        // VERY HARD / DAILY: Guesses 1-3 Normal, Guesses 4+ Mask to 0
-        if (mode === "very_hard" || mode === "daily") {
+        // VERY HARD: Guesses 1-3 Normal, Guesses 4+ Mask to 0
+        if (mode === "very_hard") {
             return session.guesses.map((g, i) => {
                 if (i >= 3) {
                     // Force neutral gray (0)
@@ -93,8 +93,6 @@
             case "extreme":
                 return 20;
             case "very_hard":
-                return 10;
-            case "daily":
                 return 10;
             case "hard":
                 return 5;
@@ -300,17 +298,17 @@
 />
 
 <div
-    class="min-h-screen bg-[#121213] text-white flex items-center justify-center p-4 font-sans overflow-x-hidden"
+    class="min-h-screen text-white flex items-center justify-center p-4 font-sans overflow-x-hidden"
 >
     <!-- Modal Overlay (Endgame) -->
     {#if showEndgameModal && session}
         <div
-            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity p-4"
             role="dialog"
             aria-modal="true"
         >
             <div
-                class="w-full max-w-sm bg-[#1e1e1e] border border-gray-700 rounded-lg p-8 text-center space-y-8 shadow-2xl"
+                class="w-full max-w-sm bg-slate-900/30 backdrop-blur-sm border border-cyan-900/40 rounded-lg p-8 text-center space-y-8 shadow-[var(--glow-cyan)] font-mono"
             >
                 <h2
                     class="text-3xl font-bold {session.status === 'WIN'
@@ -321,18 +319,23 @@
                 </h2>
 
                 <div class="space-y-2">
-                    <p class="text-xl text-white">
+                    <p class="text-xl text-text-primary">
                         Your word was <span
-                            class="font-mono font-bold text-[#d4a933]"
+                            class="text-xl text-cyan-400 font-mono tracking-[0.3em] font-bold"
                             >{session.target_word || "???"}</span
                         >
                     </p>
-                    <p class="text-lg text-white">
-                        You gained <span class="font-bold"
-                            >{session.status === "WIN" ? winPoints : "0"} points</span
+                    <p class="text-lg text-text-primary">
+                        You gained <span
+                            class="text-xl font-mono font-bold animate-[pointsPulse_400ms_ease-out] text-cyan-300"
+                            >{session.results?.points_delta != null
+                                ? session.results.points_delta
+                                : session.status === "WIN"
+                                  ? winPoints
+                                  : "0"} points</span
                         >.
                     </p>
-                    <p class="text-sm text-gray-400">
+                    <p class="text-sm text-text-muted">
                         Come back tomorrow to improve your rank.
                     </p>
                 </div>
@@ -340,14 +343,14 @@
                 <div class="flex flex-col gap-3">
                     <button
                         onclick={() => reset(true)}
-                        class="w-full px-6 py-3 bg-[#d4a933] hover:bg-[#e0b840] rounded-lg transition-colors text-black font-bold text-lg"
+                        class="w-full px-5 py-2 border-2 border-cyan-900/60 bg-slate-900/40 text-cyan-400 font-mono text-xs tracking-wider uppercase rounded hover:bg-slate-800/60 hover:border-cyan-700 transition-all hover:shadow-[0_0_8px_rgba(6,182,212,0.3)]"
                     >
                         Play Again
                     </button>
 
                     <button
                         onclick={() => (showEndgameModal = false)}
-                        class="w-full px-6 py-2 bg-transparent hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-white"
+                        class="w-full px-5 py-2 border-2 border-cyan-900/60 bg-slate-900/40 text-cyan-400 font-mono text-xs tracking-wider uppercase rounded hover:bg-slate-800/60 hover:border-cyan-700 transition-all"
                     >
                         Close
                     </button>
@@ -359,7 +362,7 @@
     <!-- Modal Overlay (Leaderboard) -->
     {#if showLeaderboard}
         <div
-            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity p-4"
             role="dialog"
             aria-modal="true"
             onclick={() => (showLeaderboard = false)}
@@ -383,7 +386,10 @@
         </div>
     {/if}
 
-    <div class="w-full max-w-7xl flex flex-col items-center gap-8">
+    <div
+        class={`w-full max-w-7xl flex flex-col items-center gap-8 relative transition-[box-shadow_color] transition-motion-medium mode-${activeMode.id}`}
+        style="box-shadow: var(--mode-accent, none);"
+    >
         <!-- Header -->
         <div
             class="flex flex-wrap lg:flex-nowrap items-center justify-center lg:justify-between w-full max-w-4xl relative gap-2 lg:gap-0 pt-4 pb-2 lg:py-0"
@@ -392,7 +398,7 @@
             <div class="flex items-center order-2 lg:order-none">
                 <button
                     onclick={() => (showInstructions = !showInstructions)}
-                    class="p-2 hover:bg-[#3a3a3c] rounded transition-colors text-white"
+                    class="p-2 hover:bg-slate-800/80 rounded transition-colors text-text-muted hover:text-white"
                     aria-label="Instructions"
                 >
                     <Info size={24} />
@@ -437,7 +443,7 @@
                 <!-- Trophy (Leaderboard) -->
                 <button
                     onclick={() => (showLeaderboard = true)}
-                    class="p-2 hover:bg-[#3a3a3c] rounded transition-colors text-[#d4a933]"
+                    class="p-2 hover:bg-slate-800/80 rounded transition-colors text-cyan-400"
                     aria-label="Leaderboard"
                 >
                     <Trophy size={24} />
@@ -484,10 +490,10 @@
 
         {#if showInstructions}
             <div
-                class="w-full max-w-2xl bg-[#1e1e1e] border border-[#3a3a3c] rounded-lg p-6 text-sm"
+                class="w-full max-w-2xl bg-slate-900/30 backdrop-blur-sm border border-cyan-900/40 rounded-lg p-6 text-sm shadow-[var(--glow-cyan)]"
             >
                 <h2 class="text-xl font-bold mb-3">{activeMode.title} Rules</h2>
-                <ul class="space-y-2 text-gray-300">
+                <ul class="space-y-2 text-slate-300">
                     <li>• Keyboard Input Only. Enter to submit.</li>
                     {#if activeMode.id === "extreme"}
                         <li>
@@ -497,7 +503,7 @@
                         </li>
                         <li>• Gray tiles only.</li>
                         <li>• Win = 20 pts.</li>
-                    {:else if activeMode.id === "very_hard" || activeMode.id === "daily"}
+                    {:else if activeMode.id === "very_hard"}
                         <li>
                             • <span class="text-[#6aaa64]">Green</span> &
                             <span class="text-[#c9b458]">Yellow</span>
@@ -509,13 +515,13 @@
                     {:else}
                         <!-- HARD -->
                         <li>
-                            • <span class="text-[#6aaa64]">Green</span> &
-                            <span class="text-[#c9b458]">Yellow</span>
+                            • <span class="text-accent-green">Green</span> &
+                            <span class="text-accent-amber">Yellow</span>
                             shown for <b>Guesses 1-3</b>.
                         </li>
                         <li>
                             • <b>Guesses 4-6</b>: Yellows Only.
-                            <span class="text-red-400">Greens hidden.</span>
+                            <span class="text-accent-red">Greens hidden.</span>
                         </li>
                         <li>• Win = 5 pts.</li>
                     {/if}

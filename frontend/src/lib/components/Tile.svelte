@@ -6,7 +6,7 @@
         disabled?: boolean; // If true, rendering might be dimmed?
     }
 
-    let { letter, color, size = "lg", disabled = false } = $props<Props>();
+    let { letter, color, size = "lg", disabled = false }: Props = $props();
 
     // Map backend colors to visual styles
     // 0 -> Gray (#3a3a3c)
@@ -16,34 +16,33 @@
 
     const getColorClass = (c: number) => {
         switch (c) {
-            case 2:
-                return "bg-[#6aaa64] border-[#6aaa64]";
-            case 1:
-                return "bg-[#c9b458] border-[#c9b458]";
-            case 0:
-                return "bg-[#3a3a3c] border-[#3a3a3c]";
+            case 2: // Green
+                return "bg-green-900/60 border-green-600 text-green-100 shadow-[var(--glow-tile-green)]";
+            case 1: // Yellow
+                return "bg-amber-900/60 border-amber-600 text-amber-100 shadow-[var(--glow-tile-amber)]";
+            case 0: // Gray
+                return "bg-slate-800/40 border-slate-700 text-slate-500";
             case 3: // Neutral Static (Very Hard Mode Phase 2)
-                return "bg-[#121213] border-[#3a3a3c]";
-            case -1:
+                return "bg-slate-900/20 border-cyan-900/40 text-cyan-300";
+            case -1: // Empty/Input
             default:
-                return "bg-[#121213] border-[#3a3a3c]";
+                return "border-cyan-500 text-cyan-300 bg-slate-900/40";
         }
     };
 
     const getSizeClass = (s: "md" | "lg") => {
         return s === "lg"
-            ? "w-14 h-14 sm:w-16 sm:h-16 text-2xl sm:text-3xl"
+            ? "w-12 h-12 md:w-14 md:h-14 text-xl md:text-2xl"
             : "w-10 h-10 text-xl"; // For small preview if needed
     };
 </script>
 
 <div
     class={`
-    flex items-center justify-center border-2 font-bold uppercase select-none transition-all
+    flex items-center justify-center border-2 font-bold uppercase select-none transition-all duration-200
     ${getSizeClass(size)}
     ${getColorClass(color)}
-    ${color !== -1 ? "text-white" : "text-white"}
-    ${letter && color === -1 ? "border-gray-500 animate-pulse" : ""}
+    ${letter && color === -1 ? "animate-[borderPulse_80ms_ease-out]" : ""}
   `}
 >
     {letter}

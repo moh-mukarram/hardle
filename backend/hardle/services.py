@@ -57,6 +57,11 @@ class GameService:
         if session.status != GameStatus.IN_PROGRESS:
             raise ValueError("Game is already over")
 
+        if guess_word == "__TIMEOUT__":
+            session.status = GameStatus.LOSE
+            session.save()
+            return session
+
         guess_word = guess_word.upper()
         if len(guess_word) != 5:
             raise ValueError("Word must be 5 letters")
@@ -82,3 +87,39 @@ class GameService:
         
         session.save()
         return session
+
+    @staticmethod
+    def calculate_daily_score(session) -> int:
+        """
+        Daily Mode Scoring Rules:
+        - GREEN letter = 10 points (Max 10 per game)
+        - YELLOW letter = 5 points (Max 10 per game)
+        - WIN Bonus = 100 + (green_count * 10) + (yellow_count * 5)
+        - LOSS = -75
+        """
+        # Use string literals for safety in comparison
+        current_status = str(session.status)
+        
+        if current_status == 'LOSE':
+            return -75
+
+        if current_status != 'WIN':
+            return 0
+
+        total_green = 0
+        total_yellow = 0
+
+        for guess_entry in session.guesses:
+            colors = guess_entry.get("colors", [])
+            total_green += colors.count(COLOR_GREEN)
+            total_yellow += colors.count(COLOR_YELLOW)
+
+        # Apply caps
+        capped_green = min(total_green, 10)
+        capped_yellow = min(total_yellow, 10)
+
+        # Calculate score
+        # Base win bonus of 100 is added to the letter scores
+        score = 100 + (capped_green * 10) + (capped_yellow * 5)
+        
+        return score

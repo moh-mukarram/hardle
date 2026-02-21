@@ -38,19 +38,25 @@ class PointsService:
         today = timezone.now().date()
         current_month = today.strftime("%Y-%m")
 
-        # Idempotency check: only enforced for "daily" mode.
-        # Other modes (hard, extreme, etc.) allow repeated wins.
-        if "daily" in source:
-            already_awarded = PointsEvent.objects.filter(
-                user=user,
-                source=source,
-                created_at__date=today,
-            ).exists()
-
-            if already_awarded:
-                return False
-
         with transaction.atomic():
+            # Idempotency check: only enforced for "daily" mode.
+            # Other modes (hard, extreme, etc.) allow repeated wins.
+            #
+            # Sources may include a session UUID suffix (e.g. "hardle_daily:uuid").
+            # We extract the prefix before ":" and check if ANY event with a
+            # source starting with that prefix was already recorded today.
+            if ':' in source:
+                prefix = source.split(':')[0]  # "hardle_daily:uuid" -> "hardle_daily"
+                
+                # Lock rows matching criteria to prevent parallel race conditions
+                already_awarded = PointsEvent.objects.select_for_update().filter(
+                    user=user,
+                    source__startswith=prefix,
+                    created_at__date=today,
+                ).exists()
+
+                if already_awarded:
+                    return 0
             # 1. Create the immutable event record
             PointsEvent.objects.create(
                 user=user,
@@ -81,7 +87,7 @@ class PointsService:
                     points=F("points") + points,
                 )
 
-        return True
+        return points
 
     @staticmethod
     def get_user_points(user, month: str = None) -> int:

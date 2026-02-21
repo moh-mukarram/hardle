@@ -1,9 +1,138 @@
 @import "tailwindcss";
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --container-2xl: 42rem;
+
+  /* Daily Theme Colors */
+  --color-red-300: oklch(.808 .114 19.571);
+  --color-red-400: oklch(.704 .191 22.216);
+  --color-red-500: oklch(.637 .237 25.331);
+  --color-red-900: oklch(.396 .141 25.723);
+
+  --color-amber-100: oklch(.962 .059 95.617);
+  --color-amber-400: oklch(.828 .189 84.429);
+  --color-amber-500: oklch(.769 .188 70.08);
+  --color-amber-600: oklch(.666 .179 58.318);
+  --color-amber-900: oklch(.414 .112 45.904);
+
+  --color-green-100: oklch(.962 .044 156.743);
+  --color-green-300: oklch(.871 .15 154.449);
+  --color-green-400: oklch(.792 .209 151.711);
+  --color-green-500: oklch(.723 .219 149.579);
+  --color-green-600: oklch(.627 .194 149.214);
+  --color-green-900: oklch(.393 .095 152.535);
+
+  --color-cyan-50: oklch(.984 .019 200.873);
+  --color-cyan-300: oklch(.865 .127 207.078);
+  --color-cyan-400: oklch(.789 .154 211.53);
+  --color-cyan-500: oklch(.715 .143 215.221);
+  --color-cyan-600: oklch(.609 .126 221.723);
+  --color-cyan-700: oklch(.52 .105 223.128);
+  --color-cyan-900: oklch(.398 .07 227.392);
+
+  --color-slate-500: oklch(.554 .046 257.417);
+  --color-slate-600: oklch(.446 .043 257.281);
+  --color-slate-700: oklch(.372 .044 257.287);
+  --color-slate-800: oklch(.279 .041 260.031);
+  --color-slate-900: oklch(.208 .042 265.755);
+  --color-slate-950: oklch(.129 .042 264.695);
+
+  /* Unified Premium Visual System Tokens */
+  --bg-premium: #0a0e1a;
+  --panel-bg: rgba(15, 23, 42, 0.6);
+  /* slate-900/60ish */
+
+  --accent-cyan: var(--color-cyan-400);
+  --accent-amber: var(--color-amber-500);
+  --accent-green: var(--color-green-500);
+  --accent-red: var(--color-red-500);
+
+  --text-primary: #ffffff;
+  --text-muted: var(--color-slate-400);
+
+  /* Glows */
+  --glow-soft: 0 0 20px rgba(255, 255, 255, 0.05);
+  /* keep for standard generic */
+  --glow-cyan: 0 0 30px rgba(6, 182, 212, 0.1);
+  --glow-amber: 0 0 30px rgba(6, 182, 212, 0.1);
+  /* Exact clone, ignore color */
+  --glow-green: 0 0 30px rgba(6, 182, 212, 0.1);
+  /* Exact clone, ignore color */
+  --glow-red: 0 0 30px rgba(6, 182, 212, 0.1);
+  /* Exact clone, ignore color */
+
+  --glow-tile-green: 0 0 6px rgba(34, 197, 94, 0.3);
+  --glow-tile-amber: 0 0 6px rgba(251, 191, 36, 0.3);
+  --glow-tile-cyan: 0 0 8px rgba(6, 182, 212, 0.4);
+
+  --glow-key-green: 0 0 4px rgba(34, 197, 94, 0.3);
+  --glow-key-amber: 0 0 4px rgba(251, 191, 36, 0.3);
+  --glow-key-cyan: 0 0 12px rgba(6, 182, 212, 0.6);
+
+  /* Shadows */
+  --shadow-elevated: -10px 0 30px -5px rgba(0, 0, 0, 0.5);
+  /* Daily leaderboard shadow */
+  --shadow-panel: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-inset-tile: inset 0 0 12px rgba(255, 255, 255, 0.05);
+
+  /* Motion */
+  --motion-fast: 150ms;
+  --motion-medium: 250ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 body {
-  background-color: #121213;
-  color: white;
+  background-color: var(--bg-premium);
+  color: var(--text-primary);
   min-height: 100vh;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: .5;
+  }
+}
+
+/* Motion Utilities */
+.transition-motion-fast {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.transition-motion-medium {
+  transition-duration: var(--motion-medium);
+  transition-timing-function: var(--ease-standard);
+}
+
+/* Mode Accents */
+.mode-hard {
+  --mode-accent: var(--glow-cyan);
+}
+
+.mode-very_hard {
+  --mode-accent: var(--glow-amber);
+}
+
+.mode-extreme {
+  --mode-accent: var(--glow-red);
 }

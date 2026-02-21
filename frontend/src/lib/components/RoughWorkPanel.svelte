@@ -16,19 +16,19 @@
 </script>
 
 <div
-    class="w-full lg:max-w-[240px] bg-[#1e1e1e] border-l border-[#333333] rounded-lg lg:rounded-l-none lg:rounded-r-lg flex flex-col h-fit transition-all"
+    class="w-full lg:max-w-[240px] bg-slate-900/30 backdrop-blur-sm border-l border-cyan-900/40 rounded-lg lg:rounded-l-none lg:rounded-r-lg flex flex-col h-fit transition-all duration-200"
 >
     <!-- Header (Clickable on Mobile) -->
     <button
-        class="w-full text-center py-4 lg:py-6 border-b border-[#333333] flex items-center justify-center gap-2 cursor-pointer lg:cursor-default"
+        class="w-full text-center py-4 lg:py-6 border-b border-cyan-900/40 flex items-center justify-center gap-2 cursor-pointer lg:cursor-default"
         onclick={() => (isCollapsed = !isCollapsed)}
         aria-expanded={!isCollapsed}
     >
-        <h2 class="text-[#aaaaaa] text-xs font-bold tracking-[1px] uppercase">
+        <h2 class="text-text-muted text-xs font-bold tracking-[1px] uppercase">
             Rough Work
         </h2>
         <!-- Mobile Toggle Icon -->
-        <div class="lg:hidden text-[#aaaaaa]">
+        <div class="lg:hidden text-text-muted">
             {#if isCollapsed}
                 <ChevronDown size={14} />
             {:else}
@@ -42,26 +42,26 @@
         <!-- Pre-filled prompts - VISUAL FIX: Removed border-b and flex-1 to prevent line bleeding -->
         <div class="font-mono text-sm space-y-3 mb-8">
             <div class="flex items-center gap-2">
-                <span class="text-[#6aaa64] font-bold whitespace-nowrap"
+                <span class="text-green-400 font-bold whitespace-nowrap"
                     >Greens =</span
                 >
                 <input
                     type="text"
                     bind:value={greensInput}
                     oninput={(e) => handleInput(e, (v) => (greensInput = v))}
-                    class="w-24 bg-transparent text-[#6aaa64] font-bold outline-none px-1 uppercase"
+                    class="w-24 bg-transparent text-green-300 font-bold focus:outline-none focus:ring-1 focus:ring-green-500/50 rounded px-1 uppercase transition-shadow"
                     placeholder="---"
                 />
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[#c9b458] font-bold whitespace-nowrap"
+                <span class="text-amber-400 font-bold whitespace-nowrap"
                     >Yellows =</span
                 >
                 <input
                     type="text"
                     bind:value={yellowsInput}
                     oninput={(e) => handleInput(e, (v) => (yellowsInput = v))}
-                    class="w-24 bg-transparent text-[#c9b458] font-bold outline-none px-1 uppercase"
+                    class="w-24 bg-transparent text-amber-300 font-bold focus:outline-none focus:ring-1 focus:ring-amber-500/50 rounded px-1 uppercase transition-shadow"
                     placeholder="---"
                 />
             </div>
@@ -72,8 +72,8 @@
             <textarea
                 bind:value={notes}
                 placeholder="Type your deductions here..."
-                class="w-full h-[320px] bg-transparent text-[#d4d4d4] font-mono text-sm resize-none outline-none placeholder:text-gray-600"
-                style="caret-color: #6aaa64;"
+                class="w-full h-[320px] bg-transparent text-cyan-300 font-mono text-sm resize-none outline-none placeholder:text-cyan-900/60 focus:ring-1 focus:ring-cyan-900/60 rounded p-1 transition-shadow"
+                style="caret-color: var(--accent-cyan);"
             ></textarea>
         </div>
     </div>
