@@ -1,585 +1,588 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { RotateCcw, Info, ArrowLeft, Trophy } from "lucide-svelte";
-    import DiscordIcon from "$lib/components/icons/DiscordIcon.svelte";
-    import { goto } from "$app/navigation";
-    import { page } from "$app/stores";
-    import {
-        getGameState,
-        submitGuess,
-        resetGame,
-        logout,
-        getMe,
-        type GameSession,
-    } from "$lib/utils/api";
-
-    import { getAuthStore } from "$lib/state/auth.svelte";
-    import { MODES } from "$lib/config/modes";
-    import GameBoard from "$lib/components/GameBoard.svelte";
-    import SummaryBox from "$lib/components/SummaryBox.svelte";
-    import RoughWorkPanel from "$lib/components/RoughWorkPanel.svelte";
+    import { ChevronUp, ChevronDown } from "lucide-svelte";
+    import Header from "$lib/components/Header.svelte";
+    import GameGrid from "$lib/components/GameGrid.svelte";
+    import Keyboard from "$lib/components/Keyboard.svelte";
+    import DecryptionPanel from "$lib/components/DecryptionPanel.svelte";
+    import OutcomeMessage from "$lib/components/OutcomeMessage.svelte";
+    import SessionTimer from "$lib/components/SessionTimer.svelte";
+    import ClearancePanel from "$lib/components/ClearancePanel.svelte";
+    import LeaderboardPanel from "$lib/components/LeaderboardPanel.svelte";
     import Leaderboard from "$lib/components/Leaderboard.svelte";
+    import { getAuthStore } from "$lib/state/auth.svelte";
+    import { API_BASE, ensureCsrfToken } from "$lib/utils/api";
+    import { userStore } from "$lib/stores/user";
+    import "$lib/styles/daily.css";
 
     const auth = getAuthStore();
 
-    // State
-    let session = $state<GameSession | null>(null);
-    let currentGuess = $state("");
-    let loading = $state(false);
-    let errorMsg = $state("");
-    let hiddenInput: HTMLInputElement; // Ref for mobile keyboard trigger
-    // Reactive activeMode based on URL
-    let activeMode = $state(MODES.find((m) => m.id === "hard")!);
+    // Word list for the game
 
-    // Visual Filters (Experimental Modes)
-    // Always enabled by default (false = colors shown). Masking happens in displayGuesses.
-    let disableGreen = $state(false);
-    let disableYellow = $state(false);
+    // Session time limit in seconds (5 minutes)
+    const SESSION_TIME_LIMIT = 300;
 
-    // Modal States
-    let showInstructions = $state(false);
-    let showLeaderboard = $state(false);
-    let showEndgameModal = $state(false);
+    type LetterState = "correct" | "present" | "absent" | "empty" | "current";
 
-    // Derived State for Board Display
-    // Derived State for Board Display
-    let displayGuesses = $derived.by(() => {
-        if (!session) return [];
-
-        const mode = activeMode.id;
-
-        // EXTREME: Always suppress colors (Mask to 0)
-        if (mode === "extreme") {
-            return session.guesses.map((g) => ({
-                ...g,
-                colors: [0, 0, 0, 0, 0],
-            }));
-        }
-
-        // VERY HARD: Guesses 1-3 Normal, Guesses 4+ Mask to 0
-        if (mode === "very_hard") {
-            return session.guesses.map((g, i) => {
-                if (i >= 3) {
-                    // Force neutral gray (0)
-                    return { ...g, colors: [0, 0, 0, 0, 0] };
-                }
-                return g;
-            });
-        }
-
-        // HARD: Guesses 1-3 Normal, Guesses 4+ Disable GREEN (2->0), Keep YELLOW
-        if (mode === "hard") {
-            return session.guesses.map((g, i) => {
-                if (i >= 3) {
-                    return {
-                        ...g,
-                        // Map Green(2) -> Gray(0). Keep Yellow(1) and Gray(0).
-                        colors: g.colors.map((c) => (c === 2 ? 0 : c)),
-                    };
-                }
-                return g;
-            });
-        }
-
-        // Default: Show colors as-is
-        return session.guesses;
-    });
-
-    // Scoring Logic (Display Only)
-    // EXTREME=20, VERY_HARD=10, DAILY=10, HARD=5
-    let winPoints = $derived.by(() => {
-        if (!activeMode) return 0;
-        switch (activeMode.id) {
-            case "extreme":
-                return 20;
-            case "very_hard":
-                return 10;
-            case "hard":
-                return 5;
-            default:
-                return 5;
-        }
-    });
-
-    $effect(() => {
-        const modeId = $page.url.searchParams.get("mode");
-        if (modeId) {
-            const found = MODES.find((m) => m.id === modeId);
-            if (found) {
-                activeMode = found;
-            }
-        }
-    });
-
-    onMount(async () => {
-        // Auth Check
-        if (!auth.isAuthenticated && !auth.isLoading) {
-            goto("/");
-            return;
-        }
-
-        try {
-            loading = true;
-            const modeParam = $page.url.searchParams.get("mode") || "hard";
-            // Update activeMode immediately for UI consistency
-            const found = MODES.find((m) => m.id === modeParam);
-            if (found) activeMode = found;
-
-            session = await getGameState(undefined, modeParam);
-
-            if (
-                session &&
-                (session.status === "WIN" || session.status === "LOSE")
-            ) {
-                showEndgameModal = true;
-            }
-        } catch (e) {
-            console.error(e);
-            errorMsg = "Failed to load game.";
-        } finally {
-            loading = false;
-        }
-    });
-
-    // ... (rest of the file remains, removing handleVirtualKey and Keyboard markup below)
-
-    // Reactive check for auth in case of logout
-    $effect(() => {
-        if (!auth.isAuthenticated && !auth.isLoading) {
-            goto("/");
-        }
-    });
-
-    async function handleLogout() {
-        try {
-            await logout();
-        } catch (e) {
-            console.error("Logout failed", e);
-        } finally {
-            auth.setUser(null);
-            goto("/");
-        }
+    interface Guess {
+        letters: string[];
+        states: LetterState[];
+        colors?: number[];
     }
 
-    async function handleKeydown(e: KeyboardEvent) {
-        if (!session || session.status !== "IN_PROGRESS" || loading) return;
-        if (e.metaKey || e.ctrlKey || e.altKey) return;
-        if (showLeaderboard || showEndgameModal) return; // Prevent playing while modal is open
+    interface OutcomeMessages {
+        primary: string;
+        secondary: string;
+    }
 
-        // Ignore typing in input fields (RoughWorkPanel)
-        if (
-            (e.target instanceof HTMLInputElement &&
-                e.target !== hiddenInput) ||
-            e.target instanceof HTMLTextAreaElement
-        )
-            return;
+    let targetWord = $state("");
+    let guesses = $state<Guess[]>([]);
+    let currentGuess = $state(0);
+    let currentLetter = $state(0);
+    let gameStatus = $state<"playing" | "won" | "lost">("playing");
+    let statusMessage = $state("AWAITING INPUT");
+    let keyStates = $state<Map<string, LetterState>>(new Map());
+    let panelOpen = $state(false);
+    let timeRemaining = $state(SESSION_TIME_LIMIT);
+    let isProcessing = $state(false);
+    let resolvingTileIndex = $state(-1);
+    let enterPressed = $state(false);
+    let outcomeMessages = $state<OutcomeMessages | null>(null);
+    let lossReason = $state<"attempts" | "time" | null>(null);
 
-        if (e.key === "Backspace") {
-            currentGuess = currentGuess.slice(0, -1);
-            return;
-        }
+    // Leaderboard state
+    let leaderboardOpen = $state(false);
+    let leaderboardRef: LeaderboardPanel | undefined = $state();
 
-        if (e.key === "Enter") {
-            if (currentGuess.length !== 5) {
-                errorMsg = "Not enough letters";
-                setTimeout(() => (errorMsg = ""), 2000);
+    // Session timer
+    $effect(() => {
+        if (gameStatus !== "playing") return;
+
+        const timer = setInterval(() => {
+            if (gameStatus !== "playing") {
+                clearInterval(timer);
                 return;
             }
-            await submit();
-            return;
-        }
+            if (timeRemaining <= 1) {
+                // Call backend to expire session
+                expireSession();
+                timeRemaining = 0;
+                clearInterval(timer);
+            } else {
+                timeRemaining -= 1;
+            }
+        }, 1000);
 
-        // If hidden input is used, let handleInput handle letters to avoid duplicates/Android issues
-        if (e.target === hiddenInput) return;
+        return () => clearInterval(timer);
+    });
 
-        if (/^[a-zA-Z]$/.test(e.key) && currentGuess.length < 5) {
-            currentGuess += e.key.toUpperCase();
+    function handleKeyPress(key: string) {
+        if (gameStatus !== "playing" || isProcessing) return;
+
+        if (key === "ENTER") {
+            if (currentLetter === 5) {
+                enterPressed = true;
+                setTimeout(() => (enterPressed = false), 200);
+                submitGuess();
+            }
+        } else if (key === "BACKSPACE") {
+            if (currentLetter > 0) {
+                guesses[currentGuess].letters[currentLetter - 1] = "";
+                guesses[currentGuess].states[currentLetter - 1] = "empty";
+                currentLetter -= 1;
+            }
+        } else if (key.length === 1 && /[A-Z]/.test(key)) {
+            if (currentLetter < 5) {
+                guesses[currentGuess].letters[currentLetter] = key;
+                guesses[currentGuess].states[currentLetter] = "current";
+                currentLetter += 1;
+            }
         }
     }
 
-    async function submit() {
-        if (!session) return;
+    let sessionId = $state("");
+    let displayedPoints = $state(0);
+
+    async function loadGameState() {
         try {
-            loading = true;
-            errorMsg = "";
-            session = await submitGuess(session.id, currentGuess);
-            if (session.status === "WIN" || session.status === "LOSE") {
-                // Refresh User Points
-                if (auth.isAuthenticated) {
-                    try {
-                        const user = await getMe();
-                        auth.setUser(user);
-                    } catch (err) {
-                        console.error("Failed to refresh points", err);
+            const res = await fetch(`/api/game/state?mode=daily`, {
+                credentials: "include",
+            });
+            if (res.ok) {
+                const data = await res.json();
+                sessionId = data.id;
+                gameStatus =
+                    data.status === "IN_PROGRESS"
+                        ? "playing"
+                        : data.status.toLowerCase();
+
+                // Re-hydrate blank structure for unified rendering
+                const baseGuesses = Array(6)
+                    .fill(null)
+                    .map(() => ({
+                        letters: ["", "", "", "", ""],
+                        states: [
+                            "empty",
+                            "empty",
+                            "empty",
+                            "empty",
+                            "empty",
+                        ] as LetterState[],
+                        colors: [0, 0, 0, 0, 0], // Native array for standard color modes
+                    }));
+                // Hydrate guesses and inject standard mode overrides
+                data.guesses.forEach((g: any, i: number) => {
+                    if (i < 6) {
+                        const letters = g.word.split("");
+                        let colors = g.colors;
+
+                        const states = colors.map((c: number) =>
+                            c === 2
+                                ? "correct"
+                                : c === 1
+                                  ? "present"
+                                  : "absent",
+                        );
+
+                        baseGuesses[i] = { letters, states, colors };
+                    }
+                });
+                guesses = baseGuesses;
+                currentGuess = data.guesses.length;
+
+                // Hydrate Keyboard
+                const newKeyStates = new Map(keyStates);
+                data.guesses.forEach((g: any) => {
+                    g.word.split("").forEach((char: string, index: number) => {
+                        const color = g.colors[index];
+                        const state =
+                            color === 2
+                                ? "correct"
+                                : color === 1
+                                  ? "present"
+                                  : "absent";
+                        const currentState = newKeyStates.get(char);
+                        if (state === "correct")
+                            newKeyStates.set(char, "correct");
+                        else if (
+                            state === "present" &&
+                            currentState !== "correct"
+                        )
+                            newKeyStates.set(char, "present");
+                        else if (state === "absent" && !currentState)
+                            newKeyStates.set(char, "absent");
+                    });
+                });
+                keyStates = newKeyStates;
+
+                // Handle Game Over State/Result Rehydration
+                if (data.status !== "IN_PROGRESS") {
+                    targetWord = data.target_word || "";
+
+                    if (data.status === "WIN") {
+                        gameStatus = "won";
+                        statusMessage = "ACCESS GRANTED";
+                        outcomeMessages = {
+                            primary: "SYSTEM BREACHED",
+                            secondary: "ACCESS GRANTED — COMPLETE",
+                        };
+                    } else {
+                        gameStatus = "lost";
+                        statusMessage = "DECRYPTION FAILED";
+                        outcomeMessages = {
+                            primary: "DECRYPTION FAILED",
+                            secondary: "KEY COULD NOT BE DERIVED",
+                        };
                     }
                 }
-                showEndgameModal = true;
             }
-            currentGuess = "";
-        } catch (e: any) {
-            errorMsg = e.message;
-            setTimeout(() => (errorMsg = ""), 3000); // Clear error after 3s
-        } finally {
-            loading = false;
-        }
-    }
-
-    async function reset(skipConfirm = false) {
-        if (!skipConfirm && !confirm("Start a new game?")) return;
-        try {
-            loading = true;
-            session = await resetGame(activeMode.id);
-            currentGuess = "";
-            errorMsg = "";
-            showEndgameModal = false;
         } catch (e) {
-            console.error(e);
-        } finally {
-            loading = false;
+            console.error("Failed to load game state", e);
         }
     }
 
-    function getRowCounts() {
-        if (!session) return [];
-        return Array(6)
-            .fill(null)
-            .map((_, i) => {
-                const guess = session!.guesses[i];
-                if (!guess) return { greenCount: 0, yellowCount: 0 };
+    async function expireSession() {
+        if (gameStatus !== "playing") return;
 
-                const greenCount = guess.colors.filter((c) => c === 2).length;
-                const yellowCount = guess.colors.filter((c) => c === 1).length;
-                return { greenCount, yellowCount };
+        try {
+            const res = await fetch(`/api/game/guess?session_id=${sessionId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ guess: "__TIMEOUT__" }),
+                credentials: "include",
             });
-    }
 
-    function handleInput(
-        e: Event & { currentTarget: EventTarget & HTMLInputElement },
-    ) {
-        if (!session || session.status !== "IN_PROGRESS" || loading) return;
-        const target = e.currentTarget;
-        const val = target.value;
-
-        // Reset input immediately to keep it clean
-        target.value = "";
-
-        if (!val) {
-            // If value is empty, it might be a backspace was pressed while empty?
-            // Input event with inputType 'deleteContentBackward' handles backspace normally.
-            const inputEvent = e as unknown as InputEvent;
-            if (inputEvent.inputType === "deleteContentBackward") {
-                currentGuess = currentGuess.slice(0, -1);
+            if (res.ok) {
+                const data = await res.json();
+                handleGameEnd(data.results);
             }
-            return;
-        }
-
-        // Handle inserted text
-        const char = val.slice(-1).toUpperCase(); // Take last char just in case
-        if (/^[A-Z]$/.test(char) && currentGuess.length < 5) {
-            currentGuess += char;
+        } catch (e) {
+            console.error("Failed to expire session", e);
         }
     }
+
+    function handleGameEnd(results: any) {
+        if (!results) return;
+
+        targetWord = results.solution || targetWord; // Fallback to existing if missing
+        displayedPoints = results.points_delta || 0;
+
+        // Update user total points in store
+        userStore.update((u) => {
+            u.points += results.points_delta;
+            return u;
+        });
+
+        // Sync auth store with new total
+        if (auth.user) {
+            auth.setUser({ ...auth.user, points: $userStore.points });
+        }
+
+        // Refresh leaderboard to reflect new scores
+        if (leaderboardRef) {
+            leaderboardRef.refresh();
+        }
+
+        if (results.outcome === "WIN") {
+            gameStatus = "won";
+            statusMessage = "ACCESS GRANTED";
+            outcomeMessages = {
+                primary: "SYSTEM BREACHED",
+                secondary: "ACCESS GRANTED — COMPLETE",
+            };
+        } else if (results.outcome === "SESSION_EXPIRED") {
+            gameStatus = "lost";
+            lossReason = "time";
+            statusMessage = "SESSION EXPIRED";
+            outcomeMessages = {
+                primary: "SESSION EXPIRED",
+                secondary: "THE WORLD COULD NOT BE SAVED",
+            };
+        } else {
+            gameStatus = "lost";
+            lossReason = "attempts";
+            statusMessage = "DECRYPTION FAILED";
+            outcomeMessages = {
+                primary: "DECRYPTION FAILED",
+                secondary: "KEY COULD NOT BE DERIVED",
+            };
+        }
+    }
+
+    async function submitGuess() {
+        isProcessing = true;
+        statusMessage = "PROCESSING GUESS";
+
+        const guessWord = guesses[currentGuess].letters.join("");
+
+        try {
+            const res = await fetch(`/api/game/guess?session_id=${sessionId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ guess: guessWord }),
+                credentials: "include",
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                statusMessage = err.message || "ERROR";
+                isProcessing = false;
+                // Shake animation could trigger here
+                return;
+            }
+
+            const data = await res.json();
+            const lastGuess = data.guesses[data.guesses.length - 1];
+            const newStates = lastGuess.colors.map((c: number) =>
+                c === 2 ? "correct" : c === 1 ? "present" : "absent",
+            );
+
+            guesses[currentGuess].colors = lastGuess.colors;
+
+            const finalizeTurn = () => {
+                resolvingTileIndex = -1;
+
+                // Update keyboard states
+                const newKeyStates = new Map(keyStates);
+                guessWord.split("").forEach((letter, i) => {
+                    const currentState = newKeyStates.get(letter);
+                    const newState = newStates[i];
+
+                    if (newState === "correct") {
+                        newKeyStates.set(letter, "correct");
+                    } else if (
+                        newState === "present" &&
+                        currentState !== "correct"
+                    ) {
+                        newKeyStates.set(letter, "present");
+                    } else if (newState === "absent" && !currentState) {
+                        newKeyStates.set(letter, "absent");
+                    }
+                });
+                keyStates = newKeyStates;
+
+                // Check win/loss from Backend Status
+                if (data.status !== "IN_PROGRESS") {
+                    const results = data.results || {
+                        outcome: data.status,
+                        solution: data.target_word,
+                        points_delta: 0,
+                        greens_count: 0,
+                        yellows_count: 0,
+                    };
+                    handleGameEnd(results);
+                } else {
+                    currentGuess += 1;
+                    currentLetter = 0;
+                    statusMessage = "AWAITING INPUT";
+                }
+
+                isProcessing = false;
+            };
+
+            // Animate tiles resolving sequentially
+            let currentTile = 0;
+            const revealInterval = setInterval(() => {
+                if (currentTile < 5) {
+                    resolvingTileIndex = currentTile;
+                    guesses[currentGuess].states[currentTile] =
+                        newStates[currentTile];
+                    currentTile++;
+                } else {
+                    clearInterval(revealInterval);
+                    finalizeTurn();
+                }
+            }, 150);
+        } catch (e) {
+            statusMessage = "CONNECTION ERROR";
+            isProcessing = false;
+        }
+    }
+
+    onMount(() => {
+        ensureCsrfToken();
+        loadGameState();
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Enter") {
+                handleKeyPress("ENTER");
+            } else if (e.key === "Backspace") {
+                handleKeyPress("BACKSPACE");
+            } else if (/^[a-zA-Z]$/.test(e.key)) {
+                handleKeyPress(e.key.toUpperCase());
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    });
+
+    let greens = $derived(
+        Math.min(
+            guesses
+                .slice(0, currentGuess + 1)
+                .flatMap((g) => g.states.filter((s) => s === "correct")).length,
+            10,
+        ),
+    );
+
+    let yellows = $derived(
+        Math.min(
+            guesses
+                .slice(0, currentGuess + 1)
+                .flatMap((g) => g.states.filter((s) => s === "present")).length,
+            10,
+        ),
+    );
+
+    // Animated status message with ellipsis
+    let animatedStatus = $state("AWAITING INPUT");
+    $effect(() => {
+        if (statusMessage === "PROCESSING GUESS" && isProcessing) {
+            const interval = setInterval(() => {
+                const dots = Math.floor((Date.now() / 400) % 4);
+                animatedStatus = "PROCESSING GUESS" + ".".repeat(dots);
+            }, 100);
+            return () => clearInterval(interval);
+        } else {
+            animatedStatus = statusMessage;
+        }
+    });
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<!-- Mobile Keyboard Trigger (Hidden but effectively visible for Android) -->
-<!-- opacity-1 but tiny: Android ignores opacity-0 inputs -->
-<input
-    bind:this={hiddenInput}
-    type="text"
-    inputmode="text"
-    class="fixed top-0 left-0 w-px h-px opacity-1 pointer-events-auto"
-    autocomplete="off"
-    autocorrect="off"
-    autocapitalize="characters"
-    spellcheck="false"
-    oninput={handleInput}
-/>
-
-<div
-    class="min-h-screen text-white flex items-center justify-center p-4 font-sans overflow-x-hidden"
->
-    <!-- Modal Overlay (Endgame) -->
-    {#if showEndgameModal && session}
-        <div
-            class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity p-4"
-            role="dialog"
-            aria-modal="true"
-        >
-            <div
-                class="w-full max-w-sm bg-slate-900/30 backdrop-blur-sm border border-cyan-900/40 rounded-lg p-8 text-center space-y-8 shadow-[var(--glow-cyan)] font-mono"
-            >
-                <h2
-                    class="text-3xl font-bold {session.status === 'WIN'
-                        ? 'text-green-500'
-                        : 'text-red-500'}"
-                >
-                    {session.status === "WIN" ? "Well done!" : "Game Over"}
-                </h2>
-
-                <div class="space-y-2">
-                    <p class="text-xl text-text-primary">
-                        Your word was <span
-                            class="text-xl text-cyan-400 font-mono tracking-[0.3em] font-bold"
-                            >{session.target_word || "???"}</span
-                        >
-                    </p>
-                    <p class="text-lg text-text-primary">
-                        You gained <span
-                            class="text-xl font-mono font-bold animate-[pointsPulse_400ms_ease-out] text-cyan-300"
-                            >{session.results?.points_delta != null
-                                ? session.results.points_delta
-                                : session.status === "WIN"
-                                  ? winPoints
-                                  : "0"} points</span
-                        >.
-                    </p>
-                    <p class="text-sm text-text-muted">
-                        Come back tomorrow to improve your rank.
-                    </p>
-                </div>
-
-                <div class="flex flex-col gap-3">
-                    <button
-                        onclick={() => reset(true)}
-                        class="w-full px-5 py-2 border-2 border-cyan-900/60 bg-slate-900/40 text-cyan-400 font-mono text-xs tracking-wider uppercase rounded hover:bg-slate-800/60 hover:border-cyan-700 transition-all hover:shadow-[0_0_8px_rgba(6,182,212,0.3)]"
-                    >
-                        Play Again
-                    </button>
-
-                    <button
-                        onclick={() => (showEndgameModal = false)}
-                        class="w-full px-5 py-2 border-2 border-cyan-900/60 bg-slate-900/40 text-cyan-400 font-mono text-xs tracking-wider uppercase rounded hover:bg-slate-800/60 hover:border-cyan-700 transition-all"
-                    >
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    {/if}
-
-    <!-- Modal Overlay (Leaderboard) -->
-    {#if showLeaderboard}
-        <div
-            class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity p-4"
-            role="dialog"
-            aria-modal="true"
-            onclick={() => (showLeaderboard = false)}
-            onkeydown={(e) => e.key === "Escape" && (showLeaderboard = false)}
-            tabindex="0"
-        >
-            <div
-                class="w-full max-w-lg"
-                onclick={(e) => e.stopPropagation()}
-                role="document"
-                tabindex="0"
-            >
-                <Leaderboard />
-                <div class="mt-4 text-center">
-                    <button
-                        class="text-sm text-gray-500 hover:text-white"
-                        onclick={() => (showLeaderboard = false)}>Close</button
-                    >
-                </div>
-            </div>
-        </div>
-    {/if}
+<div class="min-h-screen text-cyan-400 font-mono flex flex-col">
+    <Header
+        {timeRemaining}
+        sessionTimeLimit={SESSION_TIME_LIMIT}
+        onLeaderboardOpen={() => (leaderboardOpen = true)}
+    />
 
     <div
-        class={`w-full max-w-7xl flex flex-col items-center gap-8 relative transition-[box-shadow_color] transition-motion-medium mode-${activeMode.id}`}
-        style="box-shadow: var(--mode-accent, none);"
+        class="flex flex-col lg:flex-row gap-4 lg:gap-6 px-4 lg:px-6 py-3 lg:py-4 max-w-[1600px] mx-auto flex-1 w-full"
     >
-        <!-- Header -->
-        <div
-            class="flex flex-wrap lg:flex-nowrap items-center justify-center lg:justify-between w-full max-w-4xl relative gap-2 lg:gap-0 pt-4 pb-2 lg:py-0"
-        >
-            <!-- Left: Instructions -->
-            <div class="flex items-center order-2 lg:order-none">
-                <button
-                    onclick={() => (showInstructions = !showInstructions)}
-                    class="p-2 hover:bg-slate-800/80 rounded transition-colors text-text-muted hover:text-white"
-                    aria-label="Instructions"
-                >
-                    <Info size={24} />
-                </button>
-            </div>
-
-            <!-- Center: Title & User Info Stacked -->
+        <!-- Main game area -->
+        <div class="flex-1 flex flex-col">
+            <!-- Session info -->
             <div
-                class="w-full max-w-md relative flex flex-col items-center justify-center order-1 lg:order-none pointer-events-none"
+                class="text-xs text-cyan-500/60 mb-2 lg:mb-4 border border-cyan-900/40 rounded px-3 py-2 bg-slate-900/20 font-mono"
             >
-                <!-- Dynamic Mode Header Container (Display Only) -->
-                <!-- Exact 1:1 match of Modes card styling, with pointer-events disabled for interaction but enabled for layout -->
-                <div
-                    class="w-full max-w-md flex flex-col items-start p-5 rounded-xl border {activeMode.bg} text-left mb-2 shadow-md transition-all pointer-events-auto"
-                >
-                    <div class="flex items-center justify-between w-full mb-1">
-                        <span
-                            class="px-2 py-0.5 text-[10px] font-bold tracking-wider rounded uppercase {activeMode.tagColor}"
-                        >
-                            {activeMode.tag}
-                        </span>
-                        <span class="text-sm tracking-widest"
-                            >{activeMode.fire}</span
-                        >
-                    </div>
-                    <h1 class="text-2xl font-bold {activeMode.color} mb-1">
-                        {activeMode.title}
-                    </h1>
-                    <p class="text-sm text-gray-400">{activeMode.desc}</p>
+                <span class="text-cyan-400/70">[l0bed]</span>
+                <span class="text-cyan-500/60">C:\\hardle</span>
+                <span class="text-cyan-600/40 mx-2">›</span>
+                <span class="text-cyan-500/50">06●08N 1 16</span>
+            </div>
+
+            <!-- Mobile timer - ABOVE grid -->
+            <div class="lg:hidden text-center mb-2">
+                <SessionTimer
+                    {timeRemaining}
+                    sessionTimeLimit={SESSION_TIME_LIMIT}
+                    compact={true}
+                    {gameStatus}
+                />
+            </div>
+
+            <!-- Game grid -->
+            <div class="flex-1 flex items-center justify-center mb-2 lg:mb-6">
+                <GameGrid
+                    {guesses}
+                    currentRow={currentGuess}
+                    {resolvingTileIndex}
+                    {gameStatus}
+                />
+            </div>
+
+            <!-- Status message - BELOW grid, ABOVE keyboard - Mobile -->
+            <div
+                class="lg:hidden text-xs text-cyan-400 mb-2 font-mono tracking-wider text-center min-h-[16px]"
+            >
+                {outcomeMessages ? outcomeMessages.primary : animatedStatus}
+            </div>
+
+            <!-- Keyboard - shown only when playing -->
+            {#if gameStatus === "playing"}
+                <Keyboard
+                    onKeyPress={handleKeyPress}
+                    {keyStates}
+                    {enterPressed}
+                    disabled={isProcessing}
+                />
+            {/if}
+
+            <!-- Keyboard fade out on game end -->
+            {#if gameStatus !== "playing"}
+                <div class="h-0 overflow-hidden"></div>
+            {/if}
+
+            <!-- Outcome message (end state) - Desktop -->
+            {#if outcomeMessages}
+                <div class="hidden lg:block">
+                    <OutcomeMessage
+                        primary={outcomeMessages.primary}
+                        secondary={outcomeMessages.secondary}
+                        solution={targetWord}
+                        pointsGained={displayedPoints}
+                    />
                 </div>
-                {#if auth.user}
-                    <div
-                        class="text-[10px] sm:text-xs text-gray-500 font-mono uppercase tracking-widest mt-1"
-                    >
-                        PLAYING AS {auth.user.username} | {auth.user.points} PTS
-                    </div>
-                {/if}
-            </div>
+            {/if}
 
-            <!-- Right: Controls -->
-            <div class="flex items-center gap-2 order-3 lg:order-none">
-                <!-- Trophy (Leaderboard) -->
-                <button
-                    onclick={() => (showLeaderboard = true)}
-                    class="p-2 hover:bg-slate-800/80 rounded transition-colors text-cyan-400"
-                    aria-label="Leaderboard"
+            <!-- Status message (playing state) - Desktop -->
+            {#if !outcomeMessages}
+                <div
+                    class="hidden lg:flex text-sm text-cyan-400 mb-3 lg:mb-4 font-mono tracking-wider text-center lg:text-left min-h-[20px]"
                 >
-                    <Trophy size={24} />
-                </button>
+                    {animatedStatus}
+                </div>
+            {/if}
 
-                <!-- Discord -->
-                <a
-                    href="https://discord.gg/nxYPEZT4"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="p-2 hover:bg-[#5865F2]/20 text-[#5865F2] rounded transition-colors"
-                    aria-label="Discord"
-                >
-                    <DiscordIcon size={24} />
-                </a>
+            <!-- Outcome message - Mobile (replaces keyboard) -->
+            {#if outcomeMessages}
+                <div class="lg:hidden mb-3">
+                    <OutcomeMessage
+                        primary={outcomeMessages.primary}
+                        secondary={outcomeMessages.secondary}
+                        solution={targetWord}
+                        pointsGained={displayedPoints}
+                        gameStatus={gameStatus === "playing"
+                            ? "lost"
+                            : gameStatus}
+                    />
+                </div>
+            {/if}
 
-                <div class="w-px h-6 bg-gray-700 mx-1"></div>
-
-                <button
-                    onclick={() => reset()}
-                    class="p-2 hover:bg-[#3a3a3c] rounded transition-colors text-white"
-                    aria-label="Reset"
-                >
-                    <RotateCcw size={24} />
-                </button>
-                <button
-                    onclick={() => goto("/modes")}
-                    class="p-2 hover:bg-[#3a3a3c] rounded transition-colors text-gray-400 hover:text-white"
-                    aria-label="Back to Game Modes"
-                >
-                    <ArrowLeft size={24} />
-                </button>
-            </div>
+            <!-- Clearance Panel - Mobile (after outcome) -->
+            {#if outcomeMessages}
+                <div class="lg:hidden mb-3">
+                    <ClearancePanel
+                        currentTotalPoints={$userStore.points}
+                        pointsGained={displayedPoints}
+                        gameStatus={gameStatus === "playing"
+                            ? "won"
+                            : gameStatus}
+                    />
+                </div>
+            {/if}
         </div>
 
-        <!-- Error Toast -->
-        {#if errorMsg}
-            <div
-                class="fixed top-20 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50 animate-bounce"
-            >
-                {errorMsg}
-            </div>
-        {/if}
-
-        {#if showInstructions}
-            <div
-                class="w-full max-w-2xl bg-slate-900/30 backdrop-blur-sm border border-cyan-900/40 rounded-lg p-6 text-sm shadow-[var(--glow-cyan)]"
-            >
-                <h2 class="text-xl font-bold mb-3">{activeMode.title} Rules</h2>
-                <ul class="space-y-2 text-slate-300">
-                    <li>• Keyboard Input Only. Enter to submit.</li>
-                    {#if activeMode.id === "extreme"}
-                        <li>
-                            • <span class="text-red-500 font-bold"
-                                >NO COLORS EVER.</span
-                            > Pure deduction.
-                        </li>
-                        <li>• Gray tiles only.</li>
-                        <li>• Win = 20 pts.</li>
-                    {:else if activeMode.id === "very_hard"}
-                        <li>
-                            • <span class="text-[#6aaa64]">Green</span> &
-                            <span class="text-[#c9b458]">Yellow</span>
-                            shown for <b>Guesses 1-3</b>.
-                        </li>
-                        <li>• <b>Guesses 4-6</b> are Gray (No Colors).</li>
-                        <li>• Tracker remains active.</li>
-                        <li>• Win = 10 pts.</li>
-                    {:else}
-                        <!-- HARD -->
-                        <li>
-                            • <span class="text-accent-green">Green</span> &
-                            <span class="text-accent-amber">Yellow</span>
-                            shown for <b>Guesses 1-3</b>.
-                        </li>
-                        <li>
-                            • <b>Guesses 4-6</b>: Yellows Only.
-                            <span class="text-accent-red">Greens hidden.</span>
-                        </li>
-                        <li>• Win = 5 pts.</li>
-                    {/if}
-                </ul>
-            </div>
-        {/if}
-
-        <!-- Main Game Area -->
-        <div
-            class="flex flex-col lg:flex-row items-start justify-center gap-8 w-full"
-        >
-            <!-- 
-                Mobile: Wrapper acts as a flex container to keep Board and Summary side-by-side, scaled down.
-                Desktop: Wrapper uses `contents` to vanish, letting children participate directly in the parent flex layout.
-            -->
-            <div
-                class="flex flex-row items-start justify-center gap-2 w-full origin-top scale-[0.60] sm:scale-75 md:scale-90 lg:scale-100 lg:contents order-1 cursor-pointer lg:cursor-default"
-                onclick={() => hiddenInput?.focus()}
-                role="button"
-                tabindex="0"
-                onkeydown={(e) => {
-                    if (e.key === "Enter" || e.key === " ")
-                        hiddenInput?.focus();
-                }}
-            >
-                <!-- Game Board -->
-                <div class="flex flex-col items-center gap-3 shrink-0">
-                    {#if session}
-                        <GameBoard
-                            guesses={displayGuesses}
-                            {currentGuess}
-                            status={session.status}
-                            {disableGreen}
-                            {disableYellow}
-                        />
-                    {/if}
-                    <p class="text-xs text-gray-500 whitespace-nowrap">
-                        Keyboard input only
-                    </p>
-                </div>
-
-                <!-- Summary Box (Counts) -->
-                <div class="flex flex-col items-center gap-3 shrink-0">
-                    <SummaryBox rows={getRowCounts()} />
-                    <p class="text-xs text-gray-500 whitespace-nowrap">
-                        Live count tracker
-                    </p>
-                </div>
-            </div>
-
-            <!-- Rough Work Panel -->
-            <div
-                class="flex flex-col items-center gap-3 order-2 w-full lg:w-auto mt-[-100px] sm:mt-[-50px] lg:mt-0"
-            >
-                <RoughWorkPanel />
-                <!-- Helper text hidden on mobile to save space if needed, or kept -->
-                <p class="text-xs text-gray-500">Scratch pad for notes</p>
-            </div>
+        <!-- Right panel - Desktop -->
+        <div class="hidden lg:block w-full max-w-[280px]">
+            {#if gameStatus === "playing"}
+                <DecryptionPanel
+                    {greens}
+                    {yellows}
+                    attemptsUsed={currentGuess}
+                    {gameStatus}
+                />
+            {:else}
+                <ClearancePanel
+                    currentTotalPoints={$userStore.points}
+                    pointsGained={displayedPoints}
+                    {gameStatus}
+                />
+            {/if}
         </div>
     </div>
+
+    <!-- Mobile Panel - Bottom Sheet -->
+    <div class="lg:hidden fixed bottom-0 left-0 right-0 z-40">
+        {#if gameStatus === "playing"}
+            <!-- Toggle button -->
+            <button
+                onclick={() => (panelOpen = !panelOpen)}
+                class="w-full bg-slate-900/95 border-t border-cyan-900/40 px-4 py-2.5 flex items-center justify-between"
+            >
+                <span class="text-xs tracking-widest text-cyan-400/80"
+                    >[ DECRYPTION STATE ]</span
+                >
+                {#if panelOpen}
+                    <ChevronDown class="w-4 h-4 text-cyan-400" />
+                {:else}
+                    <ChevronUp class="w-4 h-4 text-cyan-400" />
+                {/if}
+            </button>
+
+            <!-- Panel content -->
+            <div
+                class={`bg-slate-900/95 border-t border-cyan-900/40 overflow-y-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    panelOpen ? "max-h-[60vh]" : "max-h-0"
+                }`}
+            >
+                <div class="p-4">
+                    <DecryptionPanel
+                        {greens}
+                        {yellows}
+                        attemptsUsed={currentGuess}
+                        {gameStatus}
+                        isMobile={true}
+                    />
+                </div>
+            </div>
+        {/if}
+    </div>
+    <LeaderboardPanel
+        bind:this={leaderboardRef}
+        isOpen={leaderboardOpen}
+        onClose={() => (leaderboardOpen = false)}
+        currentPlayerPoints={$userStore.points}
+    />
 </div>

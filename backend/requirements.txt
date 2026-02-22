@@ -5,3 +5,6 @@ dj-database-url
 psycopg2-binary
 gunicorn
 django-cors-headers
+django-allauth[google]
+PyJWT
+cryptography

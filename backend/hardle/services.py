@@ -8,15 +8,23 @@ COLOR_GREEN = 2
 
 class GameService:
     @staticmethod
-    def create_session(mode: str = 'hard') -> GameSession:
+    def create_session() -> GameSession:
         target = get_random_target()
-        session = GameSession.objects.create(target_word=target, mode=mode)
+        session = GameSession.objects.create(target_word=target, mode='daily')
         return session
 
     @staticmethod
     def get_session(session_id: str) -> GameSession:
         try:
-            return GameSession.objects.get(id=session_id)
+            session = GameSession.objects.get(id=session_id)
+            if session.status == GameStatus.IN_PROGRESS:
+                from django.utils import timezone
+                from datetime import timedelta
+                # 5-min frontend timer + 5-min grace = 10 mins max daily window
+                if timezone.now() - session.created_at > timedelta(minutes=10):
+                    session.status = GameStatus.LOSE
+                    session.save()
+            return session
         except GameSession.DoesNotExist:
             return None
 

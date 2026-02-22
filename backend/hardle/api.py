@@ -57,7 +57,7 @@ api = NinjaAPI(title="Hardle v1.0 API")
 
 # --- Game Router ---
 @api.get("/game/state", response=GameSessionSchema)
-def get_game_state(request, session_id: str = None, mode: str = 'hard'):
+def get_game_state(request, session_id: str = None):
     # Session loading logic similar to previous version
     session = None
     if session_id:
@@ -65,7 +65,7 @@ def get_game_state(request, session_id: str = None, mode: str = 'hard'):
     
     if not session:
         # IDEMPOTENCY CHECK FOR DAILY MODE
-        if mode == 'daily' and request.user.is_authenticated:
+        if request.user.is_authenticated:
             today = timezone.now().date()
             existing_daily = GameSession.objects.filter(
                 user=request.user,
@@ -77,7 +77,7 @@ def get_game_state(request, session_id: str = None, mode: str = 'hard'):
         
         # Create new if still no session
         if not session:
-            session = GameService.create_session(mode=mode)
+            session = GameService.create_session()
             # If user is authenticated, link session
             if request.user.is_authenticated:
                 session.user = request.user
@@ -91,7 +91,7 @@ def get_game_state(request, session_id: str = None, mode: str = 'hard'):
         "id": session.id,
         "status": session.status,
         "guesses": session.guesses,
-        "mode": session.mode if hasattr(session, 'mode') else 'hard',
+        "mode": 'daily',
         "target_word": target_word,
         "results": _get_daily_results(request, session)
     }
@@ -110,17 +110,10 @@ def submit_guess(request, payload: GuessRequest, session_id: str):
                  session.save()
             
             # SCORING: Award points via PointsService (single authority)
-            if str(session.status) in ['WIN', 'LOSE'] and getattr(session, 'mode', 'hard') == 'daily':
+            if str(session.status) in ['WIN', 'LOSE']:
                 points = GameService.calculate_daily_score(session)
                 awarded = PointsService.award_points(request.user, f"hardle_daily:{session.id}", points)
                 session._awarded_points = awarded
-                
-            elif str(session.status) == 'WIN':
-                # Legacy modes
-                mode = getattr(session, 'mode', 'hard')
-                points_map = {'extreme': 20, 'very_hard': 10, 'hard': 5}
-                points = points_map.get(mode, 5)
-                PointsService.award_points(request.user, f"hardle_{mode}", points)
 
         # Build end-state results (auth or anon)
         results = _get_daily_results(request, session, guess_used=payload.guess)
@@ -137,14 +130,21 @@ def submit_guess(request, payload: GuessRequest, session_id: str):
         return 400, {"message": str(e)}
 
 @api.post("/game/reset", response=GameSessionSchema)
-def reset_game(request, mode: str = 'hard'):
-    session = GameService.create_session(mode=mode)
+def reset_game(request):
+    session = GameService.create_session()
     if request.user.is_authenticated:
         session.user = request.user
         session.save()
     return session
 
 # --- Auth Endpoints ---
+
+@api.get("/auth/csrf")
+def get_csrf_token(request):
+    """Return a CSRF token and ensure the csrftoken cookie is set."""
+    from django.middleware.csrf import get_token
+    token = get_token(request)
+    return {"csrfToken": token}
 
 @api.post("/auth/signup", response={200: UserSchema, 400: dict})
 def signup(request, payload: SignupRequest):
@@ -221,3 +221,43 @@ def logout_user(request):
     from django.contrib.auth import logout
     logout(request)
     return {"message": "Logged out successfully"}
+
+
+@api.post("/auth/guest-login", response={200: UserSchema, 400: dict})
+def guest_login(request):
+    """
+    Create a temporary guest user and start a Django session.
+    The guest account is flagged with UserProfile.is_guest=True.
+    """
+    import uuid as _uuid
+    from django.contrib.auth import login as auth_login
+
+    try:
+        # Generate a unique guest username
+        guest_suffix = _uuid.uuid4().hex[:8]
+        username = f"guest_{guest_suffix}"
+
+        # Ensure uniqueness (retry once on collision, astronomically rare)
+        if User.objects.filter(username=username).exists():
+            username = f"guest_{_uuid.uuid4().hex[:8]}"
+
+        guest_user = User.objects.create_user(
+            username=username,
+            # No email, no password — guest accounts cannot log in conventionally
+        )
+        # Mark profile as guest
+        UserProfile.objects.create(user=guest_user, is_guest=True)
+
+        # Create a standard Django session (same as regular login)
+        auth_login(request, guest_user,
+                   backend='django.contrib.auth.backends.ModelBackend')
+
+        return {
+            "username": guest_user.username,
+            "email": "",
+            "points": 0,
+            "rank": "Bronze",
+        }
+    except Exception as e:
+        return 400, {"message": str(e)}
+

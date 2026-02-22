@@ -5,9 +5,11 @@ from django.contrib.auth.models import User
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     points = models.IntegerField(default=0)
+    is_guest = models.BooleanField(default=False)
 
     def __str__(self):
         return self.user.username
+
 
 class GameStatus(models.TextChoices):
     IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
@@ -26,9 +28,14 @@ class GameSession(models.Model):
         choices=GameStatus.choices,
         default=GameStatus.IN_PROGRESS
     )
-    mode = models.CharField(max_length=20, default='hard')
+    mode = models.CharField(max_length=20, default='daily')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+        ]
 
     def __str__(self):
         return f"{self.id} - {self.status}"
@@ -43,6 +50,9 @@ class UserPoints(models.Model):
 
     class Meta:
         unique_together = ('user', 'month')
+        indexes = [
+            models.Index(fields=["month", "-total_points"]),
+        ]
 
     def __str__(self):
         return f"{self.user.username} — {self.month}: {self.total_points}pts"

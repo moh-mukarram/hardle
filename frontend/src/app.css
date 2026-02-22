@@ -38,7 +38,9 @@
   --color-slate-800: oklch(.279 .041 260.031);
   --color-slate-900: oklch(.208 .042 265.755);
   --color-slate-950: oklch(.129 .042 264.695);
+}
 
+:root {
   /* Unified Premium Visual System Tokens */
   --bg-premium: #0a0e1a;
   --panel-bg: rgba(15, 23, 42, 0.6);

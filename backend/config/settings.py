@@ -27,7 +27,14 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-x!(0mq^!gy#isvf4!o)_%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = ["*"]
+if DEBUG:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+else:
+    _hosts_env = os.environ.get("ALLOWED_HOSTS", "")
+    if _hosts_env:
+        ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(",") if h.strip()]
+    else:
+        ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 
 # Application definition
@@ -39,6 +46,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',       # Required by allauth
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
     'hardle',
     'corsheaders',
 ]
@@ -50,6 +62,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',  # Required by allauth
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -151,11 +164,66 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.railway.app",
 ]
 
-# Allow Cross-Origin Cookies for Vercel -> Railway
-SESSION_COOKIE_SAMESITE = 'None'
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SAMESITE = 'None'
-CSRF_COOKIE_SECURE = True
+# Allow Cross-Origin Cookies
+# Set SECURE_COOKIES=True in production (HTTPS) environments
+_SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "False") == "True"
+
+if _SECURE_COOKIES:
+    # Prod: cross-origin (Vercel -> Railway) over HTTPS
+    SESSION_COOKIE_SAMESITE = 'None'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SAMESITE = 'None'
+    CSRF_COOKIE_SECURE = True
+else:
+    # Dev: localhost over HTTP
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SECURE = False
+
+CSRF_COOKIE_HTTPONLY = False  # Frontend must read csrftoken cookie
+SESSION_COOKIE_HTTPONLY = True  # Session cookie must never be accessible via JS
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==============================
+# ALLAUTH / GOOGLE OAUTH
+# ==============================
+
+SITE_ID = 1
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',         # Standard email/password
+    'allauth.account.auth_backends.AuthenticationBackend',  # Allauth (Google OAuth)
+]
+
+# After Google OAuth completes, redirect browser to SvelteKit frontend
+_FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+LOGIN_REDIRECT_URL = f'{_FRONTEND_URL}/home'
+ACCOUNT_LOGOUT_REDIRECT_URL = f'{_FRONTEND_URL}/login'
+
+# Allauth account settings (allauth >= 65.x)
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']  # email-only signup
+ACCOUNT_LOGIN_METHODS = {'email'}  # Login via email
+ACCOUNT_EMAIL_VERIFICATION = 'none'  # Skip email confirmation for OAuth users
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
+        'APP': {
+            'client_id': os.environ.get('GOOGLE_CLIENT_ID', ''),
+            'secret': os.environ.get('GOOGLE_CLIENT_SECRET', ''),
+            'key': '',
+        },
+        # Auto-connect Google account to existing email accounts
+        'SOCIALACCOUNT_AUTO_SIGNUP': True,
+    }
+}
+
+# Ensure UserProfile is created for OAuth users via a signal (see models.py)
+SOCIALACCOUNT_ADAPTER = 'hardle.adapters.HardleSocialAccountAdapter'
 
 
 CORS_ALLOW_HEADERS = [

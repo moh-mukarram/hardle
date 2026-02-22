@@ -39,8 +39,7 @@ class PointsService:
         current_month = today.strftime("%Y-%m")
 
         with transaction.atomic():
-            # Idempotency check: only enforced for "daily" mode.
-            # Other modes (hard, extreme, etc.) allow repeated wins.
+            # Idempotency check: one award per user+source+day.
             #
             # Sources may include a session UUID suffix (e.g. "hardle_daily:uuid").
             # We extract the prefix before ":" and check if ANY event with a
@@ -118,7 +117,7 @@ class PointsService:
             UserPoints.objects
             .filter(month=month)
             .select_related("user")
-            .order_by("-total_points")[:limit]
+            .order_by("-total_points", "user__id")[:limit]
         )
 
         results = []

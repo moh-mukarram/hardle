@@ -12,7 +12,7 @@ class GuessDetail(Schema):
 class GameSessionSchema(Schema):
     id: UUID
     status: str
-    mode: str = 'hard'
+    mode: str = 'daily'
     guesses: List[GuessDetail]
     target_word: Optional[str] = None
     results: Optional[dict] = None  # outcome, points_delta, ranks, etc.
